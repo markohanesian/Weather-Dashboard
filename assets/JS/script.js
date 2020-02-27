@@ -32,10 +32,4 @@ $( document ).ready(function() {
        
       }})
     })
-   
-
-
-
-
-
 });
