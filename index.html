@@ -19,12 +19,34 @@
         </div>
       </section>
 
-      <div class="tile is-ancestor">
+
+<!-- input city name field -->
+      <!-- <div class="tile is-ancestor">
         <div class="tile is-4 is-vertical is-parent">
           <div class="tile is-child box">
             <input class="input is-warning is-4" type="text" id="searchinput" placeholder="City Name">
             <button class="button is-warning" type="button" id="searchbutton">Enter a City</i></button>
-          </div>
+          </div> -->
+<!-- input city name field -->
+
+<!-- autocomplete field -->
+<div class="tile is-ancestor">
+  <div class="tile is-8 is-vertical is-parent">
+    <div class="tile is-child box">
+      <form autocomplete="off" action="/action_page.php">
+        <div class="autocomplete" style="width:300px;">
+          <input id="cityname" type="text" name="myCountry" placeholder="City">
+        </div>
+        <button class="button is-warning" type="button" id="newsearch">Enter a City</i></button>
+      </form>
+    </div>
+  </div>
+
+<!-- autocomplete field -->
+
+
+
+
           <div class="tile is-child box">
             <p class="title" id="">Local Storage (in progress)</p>
             <script>
@@ -45,5 +67,10 @@
       </header>
       <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
       <script src="./assets/JS/script.js"></script>
+      <script src="./assets/JS/autocomplete.js"></script>
+      <script src="./assets/JS/cities.js" ></script>
+      <script>
+        autocomplete(document.getElementById("cityname"), cities);
+      </script>
   </body>
 </html>

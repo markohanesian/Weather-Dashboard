@@ -4,8 +4,8 @@ $( document ).ready(function() {
     let api =  "eb9d945f7a1f053eb3554527c8bf3bec"
 
 
-    $("#searchbutton").on("click", function(){
-       let city =  $("#searchinput").val();
+    $("#newsearch").on("click", function(){
+       let city =  $("#cityname").val();
 
        $.ajax({url: `http://api.openweathermap.org/data/2.5/weather?q=${city}&units=imperial&appid=${api}`, success: function(result){
         console.log(result)
