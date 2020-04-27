@@ -381,6 +381,7 @@ var cities = [
   "Winter Haven",
   "Worcester",
   "Yakima",
+  "Yerevan",
   "Yonkers",
   "York",
   "Youngstown",
