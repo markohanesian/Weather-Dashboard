@@ -30,6 +30,7 @@ $( document ).ready(function() {
         console.log(`this is the wind speed: ${speed}`)
         $("#windspeed").text(speed)
        
+        localStorage.setItem(city)
       }})
     })
 });
