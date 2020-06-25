@@ -10,6 +10,7 @@ var cities = [
   "Anaheim",
   "Anchorage",
   "Ann Arbor",
+  "Annapolis",
   "Antioch",
   "Apple Valley",
   "Appleton",
