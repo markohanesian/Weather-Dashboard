@@ -7,7 +7,7 @@ $( document ).ready(function() {
     $("#newsearch").on("click", function(){
        let city =  $("#cityname").val();
 
-       $.ajax({url: `http://api.openweathermap.org/data/2.5/weather?q=${city}&units=imperial&appid=${api}`, success: function(result){
+       $.ajax({url: `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=imperial&appid=${api}`, success: function(result){
         console.log(result)
         
         let name = result.name;
@@ -29,8 +29,16 @@ $( document ).ready(function() {
         let speed = result.wind.speed;
         console.log(`this is the wind speed: ${speed}`)
         $("#windspeed").text(speed)
-       
-        localStorage.setItem(city)
+
+
       }})
     })
+
+    const searchHistory = []
+    
+    if(JSON.parse(localStorage.getItem(`weather-app-search-history`)) !== null){
+      searchHistory = JSON.parse(localStorage.getItem(`weather-app-search-history`))
+  }
 });
+
+
