@@ -1,9 +1,8 @@
 # Weather-Dashboard
 An application that allows users to retrieve weather and geographical data for specified cities
 
-## Link to Application 
-Application: https://markohanesian.github.io/Weather-Dashboard/
-Github: https://github.com/markohanesian/Weather-Dashboard
+## Links 
+[Deploy](https://weather-dashboard-mso.netlify.app/)
 
 ## Screenshots
 pending
