@@ -13,7 +13,7 @@ pending
 ## Built With
 
 * Javascript
+* CSS
 * [Weather API](https://openweathermap.org/api)
-* [Bulma](https://bulma.io/)
 * [Font Awesome](https://fontawesome.com/)
 
