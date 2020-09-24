@@ -10,36 +10,39 @@
 </head>
 
 <body>
-  <h1 class="title is-1">Weather Dashboard</h1>
-  <h5>find the current weather information for major cities</h5>
+  <section class="header">
+    <h1>Weather Dashboard</h1>
+    <h2>Find the current weather for any major US City</h2>
+  </section>
   <!-- autocomplete field -->
-      <div id="form">
-        <form autocomplete="off" action="/action_page.php">
-          <div class="autocomplete" style="width:300px;">
-            <input id="cityname" type="text" name="myCountry" placeholder="City">
-          </div>
-          <button class="button is-warning" type="button" id="newsearch">Enter a City</i></button>
-        </form>
+  <section id="search-area">
+    <form id="weather-search" autocomplete="off" action="/action_page.php">
+      <div class="autocomplete" style="width:300px;">
+        <input id="cityname" type="text" name="myCountry" placeholder="Enter a City...">
       </div>
-    <!-- local storage         -->
-    <!-- <div class="tile is-child box">
-            <h5>Local Storage (in progress)</h5>
-          <script>
-            
-          </script>
-        </div>
-      </div> -->
-    <!-- local storage      -->
-    <div id="information">
-      <div><strong>City: </strong><span id="name"></span></div>
-      <div><strong>Temperature: </strong><span id="temp"></span></div>
-      <div><strong>Longitude: </strong><span id="lon"></span></div>
-      <div><strong>humidity: </strong><span id="humidity"></span></div>
-      <div><strong>Wind Speed: </strong><span id="windspeed"></span></div>
-    </div>
+      <button class="button is-warning" type="button" id="newsearch">GO</i></button>
+    </form>
+  </section>
+  <hr>
+  <!-- local storage         -->
+  <!-- <div class="tile is-child box">
+          <h5>Local Storage (in progress)</h5>
+        <script>
+          
+        </script>
+      </div>
+    </div> -->
+  <!-- local storage      -->
+  <section id="information">
+    <h1 id="name"></h1></div>
+    <h1 id="temp"></h1>
+    <!-- Longitude: <p id="lon"></p> -->
+    humidity: <p id="humidity"></p>
+    Wind Speed: <p id="windspeed"></p>
+  </section>
  
 
-    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="./assets/JS/script.js"></script>
     <script src="./assets/JS/autocomplete.js"></script>
     <script src="./assets/JS/cities.js"></script>
