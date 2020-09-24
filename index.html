@@ -1,79 +1,51 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-    <link rel="stylesheet" href="./assets/CSS/styles.css">
-    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
-    <title>Weather Dashboard</title>
-  </head>
-  <body>
-    <header>
-      <section class="hero is-info">
-        <div class="hero-body">
-          <div class="container has-text-centered">
-            <h1 class="title is-1">Weather Dashboard</h1>
-            <h5>find the current weather information for major cities</h5>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="./assets/CSS/styles.css">
+  <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+  <title>Weather Dashboard</title>
+</head>
+
+<body>
+  <h1 class="title is-1">Weather Dashboard</h1>
+  <h5>find the current weather information for major cities</h5>
+  <!-- autocomplete field -->
+      <div id="form">
+        <form autocomplete="off" action="/action_page.php">
+          <div class="autocomplete" style="width:300px;">
+            <input id="cityname" type="text" name="myCountry" placeholder="City">
           </div>
-        </div>
-      </section>
-
-
-<!-- input city name field -->
-      <!-- <div class="tile is-ancestor">
-        <div class="tile is-4 is-vertical is-parent">
-          <div class="tile is-child box">
-            <input class="input is-warning is-4" type="text" id="searchinput" placeholder="City Name">
-            <button class="button is-warning" type="button" id="searchbutton">Enter a City</i></button>
-          </div> -->
-<!-- input city name field -->
-
-<!-- autocomplete field -->
-<div class="tile is-ancestor">
-  <div class="tile is-8 is-vertical is-parent">
-    <div class="tile is-child box">
-      <form autocomplete="off" action="/action_page.php">
-        <div class="autocomplete" style="width:300px;">
-          <input id="cityname" type="text" name="myCountry" placeholder="City">
-        </div>
-        <button class="button is-warning" type="button" id="newsearch">Enter a City</i></button>
-      </form>
-    </div>
-  </div>
-
-<!-- autocomplete field -->
-
-
-
-<!-- local storage         -->
-          <div class="tile is-child box">
-              <h5>Local Storage (in progress)</h5>
-            <script>
-              
-            </script>
-          </div>
-        </div>
-<!-- local storage      -->
-
-        <div class="tile is-parent">
-          <div class="tile is-child box">
-            <div ><strong>City: </strong><span id="name"></span></div>
-            <div ><strong>Temperature: </strong><span id="temp"></span></div>
-            <div ><strong>Longitude: </strong><span id="lon"></span></div>
-            <div ><strong>humidity: </strong><span id="humidity"></span></div>
-            <div ><strong>Wind Speed: </strong><span id="windspeed"></span></div>
-          </div>
-        </div>
+          <button class="button is-warning" type="button" id="newsearch">Enter a City</i></button>
+        </form>
       </div>
-      </header>
-      <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
-      <script src="./assets/JS/script.js"></script>
-      <script src="./assets/JS/autocomplete.js"></script>
-      <script src="./assets/JS/cities.js" ></script>
-      <script>
-        autocomplete(document.getElementById("cityname"), cities);
-      </script>
-  </body>
+    <!-- local storage         -->
+    <!-- <div class="tile is-child box">
+            <h5>Local Storage (in progress)</h5>
+          <script>
+            
+          </script>
+        </div>
+      </div> -->
+    <!-- local storage      -->
+    <div id="information">
+      <div><strong>City: </strong><span id="name"></span></div>
+      <div><strong>Temperature: </strong><span id="temp"></span></div>
+      <div><strong>Longitude: </strong><span id="lon"></span></div>
+      <div><strong>humidity: </strong><span id="humidity"></span></div>
+      <div><strong>Wind Speed: </strong><span id="windspeed"></span></div>
+    </div>
+ 
+
+    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+    <script src="./assets/JS/script.js"></script>
+    <script src="./assets/JS/autocomplete.js"></script>
+    <script src="./assets/JS/cities.js"></script>
+    <script>
+      autocomplete(document.getElementById("cityname"), cities);
+    </script>
+</body>
+
 </html>
