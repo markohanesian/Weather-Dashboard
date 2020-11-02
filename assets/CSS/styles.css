@@ -79,6 +79,7 @@ button {
     align-self: flex-start;
     align-items: flex-start;
     text-align: left;
+    margin-left: 2rem;
 }
 
 #name {
