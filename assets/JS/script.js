@@ -1,7 +1,7 @@
 $( document ).ready(function() {
   
     
-    let api =  "eb9d945f7a1f053eb3554527c8bf3bec"
+    let api =  "REMOVED_FOR_SECURITY"
 
 
     $("#newsearch").on("click", function(){
