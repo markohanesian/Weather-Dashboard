@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, TextInput, View, ScrollView, ActivityIndicator, Text, TouchableOpacity, FlatList } from 'react-native';
+import { StyleSheet, TextInput, View, ScrollView, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { WeatherCard } from '@/components/WeatherCard';
 import { fetchWeatherByCity, searchCity } from '@/services/weatherService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 export default function TabOneScreen() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [weatherData, setWeatherData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Placeholder for Auth state
 
   // Real-time autocomplete logic
   useEffect(() => {
@@ -59,13 +62,10 @@ export default function TabOneScreen() {
     setLoading(true);
     setError('');
     try {
-      // If there are suggestions, pick the first one (most likely what user wants)
       if (suggestions.length > 0) {
         getWeatherData(suggestions[0]);
         return;
       }
-
-      // Fallback to direct search if no suggestions were found yet
       const locations = await searchCity(query);
       if (locations && locations.length > 0) {
         getWeatherData(locations[0]);
@@ -82,6 +82,24 @@ export default function TabOneScreen() {
   return (
     <View style={styles.mainWrapper}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        
+        {!isLoggedIn && (
+          <View style={styles.loginIncentive}>
+            <View style={styles.incentiveContent}>
+              <Text style={styles.incentiveTitle}>Unlock Weather Alerts! 🔔</Text>
+              <Text style={styles.incentiveText}>
+                Sign in to save cities and receive daily reports & severe weather notifications.
+              </Text>
+              <TouchableOpacity 
+                style={styles.incentiveButton} 
+                onPress={() => router.push('/two')}
+              >
+                <Text style={styles.incentiveButtonText}>Sign In Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.searchSection}>
           <View style={styles.searchContainer}>
             <TextInput
@@ -99,7 +117,6 @@ export default function TabOneScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Autocomplete Suggestions Dropdown */}
           {suggestions.length > 0 && showSuggestions && (
             <View style={styles.suggestionsContainer}>
               {suggestions.map((loc, index) => (
@@ -142,10 +159,50 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 40,
+  },
+  loginIncentive: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  incentiveContent: {
+    alignItems: 'center',
+  },
+  incentiveTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  incentiveText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  incentiveButton: {
+    backgroundColor: '#007aff',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  incentiveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
   searchSection: {
-    zIndex: 100, // Ensure dropdown stays on top
+    zIndex: 100,
     marginBottom: 20,
   },
   searchContainer: {
