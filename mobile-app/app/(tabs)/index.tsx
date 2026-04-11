@@ -59,6 +59,13 @@ export default function TabOneScreen() {
     setLoading(true);
     setError('');
     try {
+      // If there are suggestions, pick the first one (most likely what user wants)
+      if (suggestions.length > 0) {
+        getWeatherData(suggestions[0]);
+        return;
+      }
+
+      // Fallback to direct search if no suggestions were found yet
       const locations = await searchCity(query);
       if (locations && locations.length > 0) {
         getWeatherData(locations[0]);

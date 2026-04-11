@@ -9,6 +9,9 @@ const WEATHER_CHECK_TASK = 'weather-check-task';
 
 TaskManager.defineTask(WEATHER_CHECK_TASK, async () => {
   try {
+    const isAlertsEnabled = await AsyncStorage.getItem('settings_sudden_alerts');
+    if (isAlertsEnabled === 'false') return BackgroundFetch.BackgroundFetchResult.NoData;
+
     const savedCity = await AsyncStorage.getItem('lastSearchedCity');
     if (!savedCity) return BackgroundFetch.BackgroundFetchResult.NoData;
 
