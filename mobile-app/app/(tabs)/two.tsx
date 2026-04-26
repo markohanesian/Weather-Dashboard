@@ -1,19 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+
+// Platform-agnostic Alert helper
+const crossPlatformAlert = (title: string, message: string, buttons: { text: string, style?: string, onPress?: () => void }[]) => {
+  if (Platform.OS === 'web') {
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result) {
+      // Execute the "confirm" action (usually the last button in our case, or the non-cancel one)
+      const confirmButton = buttons.find(b => b.style !== 'cancel');
+      if (confirmButton && confirmButton.onPress) confirmButton.onPress();
+    }
+  } else {
+    Alert.alert(title, message, buttons as any);
+  }
+};
 
 export default function SettingsScreen() {
-  const [unit, setUnit] = useState('Imperial'); // Imperial or Metric
+  const [unit, setUnit] = useState('Imperial');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadSettings();
+    }, [])
+  );
 
   const loadSettings = async () => {
     try {
       const savedUnit = await AsyncStorage.getItem('settings_units');
       if (savedUnit !== null) setUnit(savedUnit);
+      const auth = await AsyncStorage.getItem('is_logged_in');
+      if (auth !== null) setIsLoggedIn(JSON.parse(auth));
     } catch (e) {
       console.error('Failed to load settings', e);
     }
@@ -29,12 +49,43 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleLogin = () => {
-    Alert.alert('Authentication', 'Social login (Apple/Google) integration coming soon!');
+  const handleLogin = async () => {
+    if (isLoggedIn) {
+      crossPlatformAlert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Logout', 
+            style: 'destructive',
+            onPress: async () => {
+              setIsLoggedIn(false);
+              await AsyncStorage.setItem('is_logged_in', 'false');
+            } 
+          }
+        ]
+      );
+    } else {
+      crossPlatformAlert(
+        'Sign In',
+        'Choose a provider to continue (Demo: Click OK to sign in)',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Continue', 
+            onPress: async () => {
+              setIsLoggedIn(true);
+              await AsyncStorage.setItem('is_logged_in', 'true');
+            } 
+          }
+        ]
+      );
+    }
   };
 
   const clearData = () => {
-    Alert.alert(
+    crossPlatformAlert(
       'Clear All Data',
       'Are you sure you want to delete all saved cities and reset settings?',
       [
@@ -43,9 +94,13 @@ export default function SettingsScreen() {
           text: 'Clear', 
           style: 'destructive', 
           onPress: async () => {
-            await AsyncStorage.clear();
-            setUnit('Imperial');
-            Alert.alert('Data Cleared', 'All app data has been reset.');
+            try {
+              await AsyncStorage.multiRemove(['saved_cities', 'settings_units', 'is_logged_in', 'settings_daily_report', 'settings_sudden_alerts']);
+              setUnit('Imperial');
+              setIsLoggedIn(false);
+            } catch (e) {
+              console.error('Failed to clear data', e);
+            }
           } 
         },
       ]
@@ -77,10 +132,32 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>Login with Apple or Google</Text>
-        </TouchableOpacity>
-        <Text style={styles.helperText}>Login to sync your settings across devices.</Text>
+        {!isLoggedIn ? (
+          <View style={styles.authContainer}>
+            <TouchableOpacity 
+              style={[styles.socialButton, styles.appleButton]} 
+              onPress={handleLogin}
+            >
+              <FontAwesome name="apple" size={20} color="#fff" />
+              <Text style={styles.socialButtonText}>Sign in with Apple</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.socialButton, styles.googleButton]} 
+              onPress={handleLogin}
+            >
+              <FontAwesome name="google" size={18} color="#444" />
+              <Text style={[styles.socialButtonText, { color: '#444' }]}>Sign in with Google</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogin}>
+            <Text style={styles.logoutButtonText}>Logout from Account</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.helperText}>
+          {isLoggedIn ? 'Your settings are synced!' : 'Sign in to sync your cities across all your devices.'}
+        </Text>
       </View>
 
       <View style={styles.footer}>
@@ -131,27 +208,51 @@ const styles = StyleSheet.create({
     color: '#8e8e93',
     marginTop: 2,
   },
-  loginButton: {
-    backgroundColor: '#007aff',
-    borderRadius: 10,
+  authContainer: {
+    marginVertical: 20,
+    gap: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  appleButton: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    borderColor: '#ddd',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  logoutButton: {
+    marginVertical: 20,
     paddingVertical: 12,
     alignItems: 'center',
-    marginVertical: 16,
   },
-  loginButtonText: {
-    color: '#fff',
+  logoutButtonText: {
+    color: '#ff3b30',
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   helperText: {
     fontSize: 12,
     color: '#8e8e93',
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
   },
   footer: {
     marginTop: 40,
-    marginBottom: 20,
+    marginBottom: 40,
     alignItems: 'center',
   },
   footerText: {

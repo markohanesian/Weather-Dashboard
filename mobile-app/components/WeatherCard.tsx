@@ -10,6 +10,7 @@ interface WeatherCardProps {
   windSpeed: number;
   description: string;
   isCurrentLocation?: boolean;
+  unit?: string;
 }
 
 export const WeatherCard: React.FC<WeatherCardProps> = ({
@@ -18,14 +19,15 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
   humidity,
   windSpeed,
   description,
-  isCurrentLocation
+  isCurrentLocation,
+  unit = 'F'
 }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.cityName}>{name}</Text>
         {isCurrentLocation && <Text style={styles.currentLocationLabel}>Current Location</Text>}
-        <Text style={styles.temp}>{Math.round(temp)}°</Text>
+        <Text style={styles.temp}>{Math.round(temp)}°{unit}</Text>
         <Text style={styles.description}>{description}</Text>
       </View>
 

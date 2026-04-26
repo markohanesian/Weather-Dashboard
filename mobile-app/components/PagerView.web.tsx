@@ -18,7 +18,8 @@ const PagerViewWeb = React.forwardRef(({ children, initialPage = 0, style, onPag
   const handleScroll = (event: any) => {
     if (onPageSelected) {
       const offset = event.nativeEvent.contentOffset.x;
-      const page = Math.round(offset / width);
+      const pageWidth = event.nativeEvent.layoutMeasurement.width || width;
+      const page = Math.round(offset / pageWidth);
       onPageSelected({ nativeEvent: { position: page } });
     }
   };
@@ -30,7 +31,8 @@ const PagerViewWeb = React.forwardRef(({ children, initialPage = 0, style, onPag
       pagingEnabled
       showsHorizontalScrollIndicator={false}
       style={[styles.container, style]}
-      onMomentumScrollEnd={handleScroll}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
       contentOffset={{ x: initialPage * width, y: 0 }}
     >
       {React.Children.map(children, (child) => (

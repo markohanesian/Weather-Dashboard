@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   TextInput, 
@@ -8,14 +8,25 @@ import {
   TouchableOpacity, 
   Modal, 
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  ScrollView,
+  Dimensions
 } from 'react-native';
 import { WeatherCard } from '@/components/WeatherCard';
-import { fetchWeatherByCity, fetchWeatherByCoords, searchCity } from '@/services/weatherService';
+import { 
+  fetchWeatherByCity, 
+  fetchWeatherByCoords, 
+  searchCity,
+  fetchForecastByCity,
+  fetchForecastByCoords
+} from '@/services/weatherService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import PagerView from '@/components/PagerView';
 import { FontAwesome } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
+
+const { width } = Dimensions.get('window');
 
 interface CityWeather {
   id: string;
@@ -23,10 +34,12 @@ interface CityWeather {
   lat?: number;
   lon?: number;
   data: any;
+  forecast: any[];
   isCurrentLocation?: boolean;
 }
 
 export default function WeatherDashboard() {
+  const router = useRouter();
   const [cities, setCities] = useState<CityWeather[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,29 +47,66 @@ export default function WeatherDashboard() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [activePage, setActivePage] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [units, setUnits] = useState('imperial');
   const pagerRef = useRef<PagerView>(null);
 
+  useFocusEffect(
+    useCallback(() => {
+      checkAppStatus();
+    }, [])
+  );
+
+  const checkAppStatus = async () => {
+    try {
+      const auth = await AsyncStorage.getItem('is_logged_in');
+      setIsLoggedIn(auth === 'true');
+      
+      const savedUnit = await AsyncStorage.getItem('settings_units');
+      const normalizedUnit = savedUnit?.toLowerCase() || 'imperial';
+      
+      if (normalizedUnit !== units) {
+        setUnits(normalizedUnit);
+        loadInitialData(normalizedUnit); // Refresh data if units changed
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
-    loadInitialData();
+    loadInitialData(units);
   }, []);
 
-  const loadInitialData = async () => {
+  const loadInitialData = async (currentUnits: string) => {
     setLoading(true);
+    setError('');
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
       let currentCity: CityWeather | null = null;
       
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        const weather = await fetchWeatherByCoords(location.coords.latitude, location.coords.longitude);
-        currentCity = {
-          id: 'current',
-          name: weather.name,
-          lat: location.coords.latitude,
-          lon: location.coords.longitude,
-          data: weather,
-          isCurrentLocation: true
-        };
+      try {
+        const { status } = await Promise.race([
+          Location.requestForegroundPermissionsAsync(),
+          new Promise<{status: string}>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]) as any;
+
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+          const weather = await fetchWeatherByCoords(location.coords.latitude, location.coords.longitude, currentUnits);
+          const forecast = await fetchForecastByCoords(location.coords.latitude, location.coords.longitude, currentUnits);
+          
+          currentCity = {
+            id: 'current',
+            name: weather.name,
+            lat: location.coords.latitude,
+            lon: location.coords.longitude,
+            data: weather,
+            forecast: processForecast(forecast.list),
+            isCurrentLocation: true
+          };
+        }
+      } catch (locErr) {
+        console.warn('Location access skipped or timed out:', locErr);
       }
 
       const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
@@ -65,8 +115,13 @@ export default function WeatherDashboard() {
         const parsed = JSON.parse(savedCitiesJson);
         const refreshed = await Promise.all(parsed.map(async (city: any) => {
           try {
-            const data = await fetchWeatherByCity(city.name);
-            return { ...city, data };
+            const data = await fetchWeatherByCity(city.name, currentUnits);
+            const forecast = await fetchForecastByCity(city.name, currentUnits);
+            return { 
+              ...city, 
+              data, 
+              forecast: processForecast(forecast.list) 
+            };
           } catch (e) {
             return city;
           }
@@ -78,17 +133,43 @@ export default function WeatherDashboard() {
       setCities(allCities);
     } catch (err) {
       console.error(err);
-      setError('Failed to load weather data.');
+      setError('Could not load data. Please check your internet connection.');
     } finally {
       setLoading(false);
     }
   };
 
+  const processForecast = (list: any[]) => {
+    const dailyData: { [key: string]: number[] } = {};
+    
+    list.forEach(item => {
+      const date = item.dt_txt.split(' ')[0];
+      if (!dailyData[date]) dailyData[date] = [];
+      dailyData[date].push(item.main.temp);
+    });
+
+    return Object.keys(dailyData).slice(0, 5).map(date => {
+      const temps = dailyData[date];
+      const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+      const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+      const minimalDay = dayName.startsWith('Th') ? 'Th' : (dayName.startsWith('Su') ? 'Su' : (dayName.startsWith('Sa') ? 'S' : dayName[0]));
+      
+      return {
+        day: minimalDay,
+        avgTemp: Math.round(avg)
+      };
+    });
+  };
+
   const handleSearch = async (text: string) => {
     setQuery(text);
     if (text.length > 2) {
-      const results = await searchCity(text);
-      setSuggestions(results);
+      try {
+        const results = await searchCity(text);
+        setSuggestions(results);
+      } catch (e) {
+        console.error(e);
+      }
     } else {
       setSuggestions([]);
     }
@@ -98,13 +179,16 @@ export default function WeatherDashboard() {
     setLoading(true);
     setSearchModalVisible(false);
     try {
-      const weather = await fetchWeatherByCity(`${location.name},${location.country}`);
+      const weather = await fetchWeatherByCity(`${location.name},${location.country}`, units);
+      const forecast = await fetchForecastByCity(`${location.name},${location.country}`, units);
+      
       const newCity: CityWeather = {
         id: Date.now().toString(),
         name: location.name,
         lat: location.lat,
         lon: location.lon,
-        data: weather
+        data: weather,
+        forecast: processForecast(forecast.list)
       };
 
       const updatedCities = [...cities, newCity];
@@ -131,9 +215,12 @@ export default function WeatherDashboard() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#007aff" />
+        <Text style={{ marginTop: 20, color: '#666' }}>Fetching local weather...</Text>
       </View>
     );
   }
+
+  const unitLabel = units === 'imperial' ? 'F' : 'C';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -150,8 +237,22 @@ export default function WeatherDashboard() {
         </TouchableOpacity>
       </View>
 
+      {cities.length > 1 && (
+        <View style={styles.paginationDots}>
+          {cities.map((_, index) => (
+            <View 
+              key={index} 
+              style={[
+                styles.dot, 
+                activePage === index ? styles.activeDot : styles.inactiveDot
+              ]} 
+            />
+          ))}
+        </View>
+      )}
+
       {cities.length > 0 ? (
-        <View style={styles.pagerWrapper}>
+        <View style={styles.mainContent}>
           <PagerView 
             style={styles.pager} 
             initialPage={0} 
@@ -159,33 +260,28 @@ export default function WeatherDashboard() {
             onPageSelected={(e) => setActivePage(e.nativeEvent.position)}
           >
             {cities.map((city) => (
-              <View key={city.id} style={styles.page}>
+              <ScrollView key={city.id} style={styles.page} showsVerticalScrollIndicator={false}>
                 <WeatherCard
                   name={city.name}
                   temp={city.data.main.temp}
+                  unit={unitLabel}
                   description={city.data.weather[0].description}
                   humidity={city.data.main.humidity}
                   windSpeed={city.data.wind.speed}
                   isCurrentLocation={city.isCurrentLocation}
                 />
-              </View>
+                
+                <View style={styles.minimalForecastSection}>
+                  {city.forecast.map((item, idx) => (
+                    <View key={idx} style={styles.forecastColumn}>
+                      <Text style={styles.minimalForecastDay}>{item.day}</Text>
+                      <Text style={styles.minimalForecastTemp}>{item.avgTemp}°</Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
             ))}
           </PagerView>
-
-          {/* Pagination Dots */}
-          {cities.length > 1 && (
-            <View style={styles.paginationDots}>
-              {cities.map((_, index) => (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.dot, 
-                    activePage === index ? styles.activeDot : styles.inactiveDot
-                  ]} 
-                />
-              ))}
-            </View>
-          )}
         </View>
       ) : (
         <View style={styles.centered}>
@@ -197,6 +293,19 @@ export default function WeatherDashboard() {
             <Text style={styles.retryText}>Add a City</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {!isLoggedIn && (
+        <TouchableOpacity 
+          style={styles.incentiveBanner} 
+          onPress={() => router.push('/two')}
+        >
+          <View style={styles.bannerContent}>
+            <FontAwesome name="cloud-upload" size={18} color="#fff" />
+            <Text style={styles.bannerText}>Sign in to sync your cities across devices</Text>
+          </View>
+          <FontAwesome name="chevron-right" size={14} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
       )}
 
       <Modal
@@ -262,7 +371,25 @@ const styles = StyleSheet.create({
   addButton: {
     padding: 10,
   },
-  pagerWrapper: {
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  activeDot: {
+    backgroundColor: '#333',
+  },
+  inactiveDot: {
+    backgroundColor: '#ccc',
+  },
+  mainContent: {
     flex: 1,
   },
   pager: {
@@ -271,25 +398,53 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
   },
-  paginationDots: {
+  minimalForecastSection: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    margin: 15,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  forecastColumn: {
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 40,
-    width: '100%',
     gap: 8,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  minimalForecastDay: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
   },
-  activeDot: {
-    backgroundColor: '#333',
+  minimalForecastTemp: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#333',
   },
-  inactiveDot: {
-    backgroundColor: '#ccc',
+  incentiveBanner: {
+    backgroundColor: '#007aff',
+    margin: 15,
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bannerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
