@@ -1,12 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Switch, Text, View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Switch, Text, View, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerWeatherCheckTask, unregisterWeatherCheckTask } from '@/services/backgroundService';
+import { cancelAllNotifications, requestNotificationPermissions } from '@/services/notificationService';
 
 export default function AlertsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [dailyReportEnabled, setDailyReportEnabled] = useState(false);
   const [severeWeatherEnabled, setSevereWeatherEnabled] = useState(false);
-  const [isPro, setIsPro] = useState(false); // Tier state
+  const [isPro, setIsPro] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const on = await AsyncStorage.getItem('settings_notifications_on');
+      const daily = await AsyncStorage.getItem('settings_daily_report');
+      const sudden = await AsyncStorage.getItem('settings_sudden_alerts');
+      const pro = await AsyncStorage.getItem('is_pro_user');
+
+      if (on !== null) setNotificationsEnabled(JSON.parse(on));
+      if (daily !== null) setDailyReportEnabled(JSON.parse(daily));
+      if (sudden !== null) setSevereWeatherEnabled(JSON.parse(sudden));
+      if (pro !== null) setIsPro(JSON.parse(pro));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleNotifications = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    await AsyncStorage.setItem('settings_notifications_on', JSON.stringify(value));
+    
+    if (value) {
+      const granted = await requestNotificationPermissions();
+      if (!granted && Platform.OS !== 'web') {
+        Alert.alert('Permission Required', 'Please enable notifications in your system settings.');
+        setNotificationsEnabled(false);
+        await AsyncStorage.setItem('settings_notifications_on', 'false');
+        return;
+      }
+      // Re-register background task if pro and enabled
+      if (isPro && severeWeatherEnabled) {
+        await registerWeatherCheckTask();
+      }
+    } else {
+      await cancelAllNotifications();
+      await unregisterWeatherCheckTask();
+    }
+  };
+
+  const toggleDailyReport = async (value: boolean) => {
+    setDailyReportEnabled(value);
+    await AsyncStorage.setItem('settings_daily_report', JSON.stringify(value));
+    // Here we would actually schedule the daily notification 
+    // Usually done after fetching fresh data for the user's primary city
+  };
+
+  const toggleSevereWeather = async (value: boolean) => {
+    if (!isPro) {
+      handleProAction();
+      return;
+    }
+    setSevereWeatherEnabled(value);
+    await AsyncStorage.setItem('settings_sudden_alerts', JSON.stringify(value));
+    
+    if (value && notificationsEnabled) {
+      await registerWeatherCheckTask();
+    } else {
+      await unregisterWeatherCheckTask();
+    }
+  };
 
   const handleProAction = () => {
     Alert.alert(
@@ -14,7 +81,13 @@ export default function AlertsScreen() {
       "Dynamic notifications (Snow, Rain, High Winds) are only available in the Pro version. Would you like to upgrade?",
       [
         { text: "Maybe Later", style: "cancel" },
-        { text: "Upgrade Now", onPress: () => setIsPro(true) }
+        { 
+          text: "Upgrade Now", 
+          onPress: async () => {
+            setIsPro(true);
+            await AsyncStorage.setItem('is_pro_user', 'true');
+          } 
+        }
       ]
     );
   };
@@ -27,7 +100,7 @@ export default function AlertsScreen() {
           <Text style={styles.label}>Notifications {notificationsEnabled ? 'On' : 'Off'}</Text>
           <Switch 
             value={notificationsEnabled} 
-            onValueChange={setNotificationsEnabled}
+            onValueChange={toggleNotifications}
             trackColor={{ false: "#767577", true: "#34C759" }}
             thumbColor={notificationsEnabled ? "#fff" : "#f4f3f4"}
           />
@@ -43,7 +116,7 @@ export default function AlertsScreen() {
           </View>
           <Switch 
             value={dailyReportEnabled} 
-            onValueChange={setDailyReportEnabled}
+            onValueChange={toggleDailyReport}
             disabled={!notificationsEnabled}
           />
         </View>
@@ -67,7 +140,7 @@ export default function AlertsScreen() {
           {isPro ? (
             <Switch 
               value={severeWeatherEnabled} 
-              onValueChange={setSevereWeatherEnabled}
+              onValueChange={toggleSevereWeather}
               disabled={!notificationsEnabled}
             />
           ) : (
@@ -78,7 +151,10 @@ export default function AlertsScreen() {
 
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
-          Notifications are delivered based on your saved locations. You will receive alerts for the city currently displayed on your home screen.
+          {Platform.OS === 'web' 
+            ? "Notifications are simulated on the web. Test on a physical device with Expo Go to see real background alerts."
+            : "Notifications are delivered based on your primary saved location."
+          }
         </Text>
       </View>
     </ScrollView>

@@ -2,28 +2,44 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+export async function requestNotificationPermissions() {
+  if (Platform.OS === 'web') return false;
+  
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  
+  return finalStatus === 'granted';
+}
+
 export async function registerForPushNotificationsAsync() {
-  if (Platform.OS === 'web') {
-    console.log('Push notifications are not configured for web.');
+  if (Platform.OS === 'web') return null;
+
+  if (!Device.isDevice) {
+    console.log('Must use physical device for Push Notifications');
     return null;
   }
 
-  let token;
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      alert('Failed to get push token for push notification!');
-      return;
-    }
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-  } else {
-    // alert('Must use physical device for Push Notifications');
+  const granted = await requestNotificationPermissions();
+  if (!granted) {
+    console.log('Failed to get push token for push notification!');
+    return null;
   }
+
+  const token = (await Notifications.getExpoPushTokenAsync()).data;
 
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync('default', {
@@ -37,14 +53,14 @@ export async function registerForPushNotificationsAsync() {
   return token;
 }
 
-export async function scheduleDailyWeatherNotification(hour: number, minute: number, weatherInfo: string) {
+export async function scheduleDailyWeatherNotification(hour: number, minute: number, cityName: string, weatherInfo: string) {
+  // Clear existing to avoid duplicates
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "Today's Weather Forecast 🌤️",
+      title: `Today's Weather in ${cityName} 🌤️`,
       body: weatherInfo,
-      data: { data: 'goes here' },
     },
     trigger: {
       hour: hour,
@@ -63,4 +79,8 @@ export async function sendInstantWeatherAlert(title: string, body: string) {
     },
     trigger: null, // Send immediately
   });
+}
+
+export async function cancelAllNotifications() {
+  await Notifications.cancelAllScheduledNotificationsAsync();
 }
