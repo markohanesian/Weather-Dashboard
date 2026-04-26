@@ -20,6 +20,23 @@ export const fetchWeatherByCity = async (city: string) => {
   }
 };
 
+export const fetchWeatherByCoords = async (lat: number, lon: number) => {
+  try {
+    const response = await axios.get(`${BASE_URL}/weather`, {
+      params: {
+        lat,
+        lon,
+        units: 'imperial',
+        appid: API_KEY,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching weather by coords:', error);
+    throw error;
+  }
+};
+
 export const fetchOneCallWeather = async (lat: number, lon: number) => {
   try {
     const response = await axios.get(ONECALL_URL, {

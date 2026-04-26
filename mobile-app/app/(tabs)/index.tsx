@@ -1,265 +1,341 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, TextInput, View, ScrollView, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  StyleSheet, 
+  TextInput, 
+  View, 
+  ActivityIndicator, 
+  Text, 
+  TouchableOpacity, 
+  Modal, 
+  SafeAreaView,
+  StatusBar
+} from 'react-native';
 import { WeatherCard } from '@/components/WeatherCard';
-import { fetchWeatherByCity, searchCity } from '@/services/weatherService';
+import { fetchWeatherByCity, fetchWeatherByCoords, searchCity } from '@/services/weatherService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import PagerView from '@/components/PagerView';
+import { FontAwesome } from '@expo/vector-icons';
 
-export default function TabOneScreen() {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [weatherData, setWeatherData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+interface CityWeather {
+  id: string;
+  name: string;
+  lat?: number;
+  lon?: number;
+  data: any;
+  isCurrentLocation?: boolean;
+}
+
+export default function WeatherDashboard() {
+  const [cities, setCities] = useState<CityWeather[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // Placeholder for Auth state
+  const [activePage, setActivePage] = useState(0);
+  const pagerRef = useRef<PagerView>(null);
 
-  // Real-time autocomplete logic
   useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (query.length > 2 && showSuggestions) {
-        try {
-          const locations = await searchCity(query);
-          setSuggestions(locations || []);
-        } catch (err) {
-          console.error("Autocomplete error:", err);
-        }
-      } else {
-        setSuggestions([]);
-      }
-    }, 500); // 500ms debounce
+    loadInitialData();
+  }, []);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [query, showSuggestions]);
-
-  const handleSelectCity = async (location: any) => {
-    setQuery(`${location.name}${location.state ? `, ${location.state}` : ''}, ${location.country}`);
-    setShowSuggestions(false);
-    setSuggestions([]);
-    getWeatherData(location);
-  };
-
-  const getWeatherData = async (location: any) => {
+  const loadInitialData = async () => {
     setLoading(true);
-    setError('');
     try {
-      // Step 2: Fetch weather using exact name and country from geocoder
-      const data = await fetchWeatherByCity(`${location.name},${location.country}`);
-      setWeatherData(data);
-      await AsyncStorage.setItem('lastSearchedCity', location.name);
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      let currentCity: CityWeather | null = null;
+      
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        const weather = await fetchWeatherByCoords(location.coords.latitude, location.coords.longitude);
+        currentCity = {
+          id: 'current',
+          name: weather.name,
+          lat: location.coords.latitude,
+          lon: location.coords.longitude,
+          data: weather,
+          isCurrentLocation: true
+        };
+      }
+
+      const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
+      let savedCities: CityWeather[] = [];
+      if (savedCitiesJson) {
+        const parsed = JSON.parse(savedCitiesJson);
+        const refreshed = await Promise.all(parsed.map(async (city: any) => {
+          try {
+            const data = await fetchWeatherByCity(city.name);
+            return { ...city, data };
+          } catch (e) {
+            return city;
+          }
+        }));
+        savedCities = refreshed;
+      }
+
+      const allCities = currentCity ? [currentCity, ...savedCities] : savedCities;
+      setCities(allCities);
     } catch (err) {
-      setError('Could not fetch weather for this location.');
-      setWeatherData(null);
+      console.error(err);
+      setError('Failed to load weather data.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleManualSearch = async () => {
-    if (!query) return;
-    setShowSuggestions(false);
-    setLoading(true);
-    setError('');
-    try {
-      if (suggestions.length > 0) {
-        getWeatherData(suggestions[0]);
-        return;
-      }
-      const locations = await searchCity(query);
-      if (locations && locations.length > 0) {
-        getWeatherData(locations[0]);
-      } else {
-        setError('City not found. Try being more specific (e.g. "Fresno, US").');
-      }
-    } catch (err) {
-      setError('Search failed. Please check your API key.');
-    } finally {
-      setLoading(false);
+  const handleSearch = async (text: string) => {
+    setQuery(text);
+    if (text.length > 2) {
+      const results = await searchCity(text);
+      setSuggestions(results);
+    } else {
+      setSuggestions([]);
     }
   };
+
+  const addCity = async (location: any) => {
+    setLoading(true);
+    setSearchModalVisible(false);
+    try {
+      const weather = await fetchWeatherByCity(`${location.name},${location.country}`);
+      const newCity: CityWeather = {
+        id: Date.now().toString(),
+        name: location.name,
+        lat: location.lat,
+        lon: location.lon,
+        data: weather
+      };
+
+      const updatedCities = [...cities, newCity];
+      setCities(updatedCities);
+
+      const toSave = updatedCities.filter(c => !c.isCurrentLocation);
+      await AsyncStorage.setItem('saved_cities', JSON.stringify(toSave));
+
+      setTimeout(() => {
+        pagerRef.current?.setPage(updatedCities.length - 1);
+        setActivePage(updatedCities.length - 1);
+      }, 100);
+
+    } catch (err) {
+      setError('Could not add city.');
+    } finally {
+      setLoading(false);
+      setQuery('');
+      setSuggestions([]);
+    }
+  };
+
+  if (loading && cities.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#007aff" />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.mainWrapper}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        
-        {!isLoggedIn && (
-          <View style={styles.loginIncentive}>
-            <View style={styles.incentiveContent}>
-              <Text style={styles.incentiveTitle}>Unlock Weather Alerts! 🔔</Text>
-              <Text style={styles.incentiveText}>
-                Sign in to save cities and receive daily reports & severe weather notifications.
-              </Text>
-              <TouchableOpacity 
-                style={styles.incentiveButton} 
-                onPress={() => router.push('/two')}
-              >
-                <Text style={styles.incentiveButtonText}>Sign In Now</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <View style={styles.header}>
+        <View style={{ width: 40 }} /> 
+        <Text style={styles.headerTitle}>Weather</Text>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setSearchModalVisible(true)}
+        >
+          <FontAwesome name="plus" size={20} color="#007aff" />
+        </TouchableOpacity>
+      </View>
 
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search city (e.g. Fresno)"
-              value={query}
-              onChangeText={(text) => {
-                setQuery(text);
-                setShowSuggestions(true);
-              }}
-              onSubmitEditing={handleManualSearch}
-            />
-            <TouchableOpacity style={styles.searchButton} onPress={handleManualSearch}>
-              <Text style={styles.searchButtonText}>GO</Text>
-            </TouchableOpacity>
-          </View>
+      {cities.length > 0 ? (
+        <View style={styles.pagerWrapper}>
+          <PagerView 
+            style={styles.pager} 
+            initialPage={0} 
+            ref={pagerRef}
+            onPageSelected={(e) => setActivePage(e.nativeEvent.position)}
+          >
+            {cities.map((city) => (
+              <View key={city.id} style={styles.page}>
+                <WeatherCard
+                  name={city.name}
+                  temp={city.data.main.temp}
+                  description={city.data.weather[0].description}
+                  humidity={city.data.main.humidity}
+                  windSpeed={city.data.wind.speed}
+                  isCurrentLocation={city.isCurrentLocation}
+                />
+              </View>
+            ))}
+          </PagerView>
 
-          {suggestions.length > 0 && showSuggestions && (
-            <View style={styles.suggestionsContainer}>
-              {suggestions.map((loc, index) => (
-                <TouchableOpacity 
-                  key={`${loc.lat}-${loc.lon}-${index}`} 
-                  style={styles.suggestionItem} 
-                  onPress={() => handleSelectCity(loc)}
-                >
-                  <Text style={styles.suggestionText}>
-                    {loc.name}, {loc.state ? `${loc.state}, ` : ''}{loc.country}
-                  </Text>
-                </TouchableOpacity>
+          {/* Pagination Dots */}
+          {cities.length > 1 && (
+            <View style={styles.paginationDots}>
+              {cities.map((_, index) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.dot, 
+                    activePage === index ? styles.activeDot : styles.inactiveDot
+                  ]} 
+                />
               ))}
             </View>
           )}
         </View>
+      ) : (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error || 'No locations added yet.'}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => setSearchModalVisible(true)}
+          >
+            <Text style={styles.retryText}>Add a City</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {loading && <ActivityIndicator size="large" color="#ff8c00" style={styles.loader} />}
+      <Modal
+        visible={searchModalVisible}
+        animationType="slide"
+        transparent={false}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search for a city"
+              value={query}
+              onChangeText={handleSearch}
+              autoFocus
+            />
+            <TouchableOpacity onPress={() => setSearchModalVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        {weatherData && !loading && (
-          <WeatherCard
-            name={weatherData.name}
-            temp={weatherData.main.temp}
-            humidity={weatherData.main.humidity}
-            windSpeed={weatherData.wind.speed}
-            description={weatherData.weather[0].description}
-          />
-        )}
-      </ScrollView>
-    </View>
+          <View style={styles.resultsContainer}>
+            {suggestions.map((loc, index) => (
+              <TouchableOpacity 
+                key={`${loc.lat}-${loc.lon}-${index}`} 
+                style={styles.resultItem} 
+                onPress={() => addCity(loc)}
+              >
+                <Text style={styles.resultText}>
+                  {loc.name}, {loc.state ? `${loc.state}, ` : ''}{loc.country}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  mainWrapper: {
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    height: 50,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  addButton: {
+    padding: 10,
+  },
+  pagerWrapper: {
+    flex: 1,
+  },
+  pager: {
+    flex: 1,
+  },
+  page: {
+    flex: 1,
+  },
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 40,
+    width: '100%',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  activeDot: {
+    backgroundColor: '#333',
+  },
+  inactiveDot: {
+    backgroundColor: '#ccc',
+  },
+  modalContainer: {
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  container: {
-    padding: 20,
-    paddingTop: 40,
-  },
-  loginIncentive: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  incentiveContent: {
-    alignItems: 'center',
-  },
-  incentiveTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  incentiveText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  incentiveButton: {
-    backgroundColor: '#007aff',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  incentiveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  searchSection: {
-    zIndex: 100,
-    marginBottom: 20,
-  },
-  searchContainer: {
+  modalHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    gap: 15,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#eee',
+    padding: 12,
+    borderRadius: 10,
     fontSize: 16,
-    marginRight: 10,
   },
-  searchButton: {
-    backgroundColor: '#ff8c00',
-    justifyContent: 'center',
-    paddingHorizontal: 25,
-    borderRadius: 12,
+  cancelText: {
+    color: '#007aff',
+    fontSize: 16,
   },
-  searchButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  resultsContainer: {
+    paddingHorizontal: 20,
   },
-  suggestionsContainer: {
-    position: 'absolute',
-    top: 55,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    zIndex: 1000,
-  },
-  suggestionItem: {
-    padding: 15,
+  resultItem: {
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  suggestionText: {
+  resultText: {
     fontSize: 16,
-    color: '#333',
-  },
-  loader: {
-    marginTop: 40,
   },
   errorText: {
-    color: 'red',
+    color: '#666',
     textAlign: 'center',
-    marginTop: 20,
-    fontSize: 16,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#007aff',
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  retryText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

@@ -1,53 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Switch, View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FontAwesome } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
-  const [dailyReport, setDailyReport] = useState(false);
-  const [suddenAlerts, setSuddenAlerts] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [unit, setUnit] = useState('Imperial'); // Imperial or Metric
 
   useEffect(() => {
-    // Load saved settings
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
     try {
-      const daily = await AsyncStorage.getItem('settings_daily_report');
-      const sudden = await AsyncStorage.getItem('settings_sudden_alerts');
-      if (daily !== null) setDailyReport(JSON.parse(daily));
-      if (sudden !== null) setSuddenAlerts(JSON.parse(sudden));
+      const savedUnit = await AsyncStorage.getItem('settings_units');
+      if (savedUnit !== null) setUnit(savedUnit);
     } catch (e) {
       console.error('Failed to load settings', e);
     }
   };
 
-  const saveSetting = async (key: string, value: boolean) => {
+  const toggleUnit = async () => {
+    const newUnit = unit === 'Imperial' ? 'Metric' : 'Imperial';
+    setUnit(newUnit);
     try {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
+      await AsyncStorage.setItem('settings_units', newUnit);
     } catch (e) {
-      console.error('Failed to save setting', e);
+      console.error('Failed to save units', e);
     }
   };
 
-  const toggleDailyReport = (value: boolean) => {
-    setDailyReport(value);
-    saveSetting('settings_daily_report', value);
-  };
-
-  const toggleSuddenAlerts = (value: boolean) => {
-    setSuddenAlerts(value);
-    saveSetting('settings_sudden_alerts', value);
-  };
-
   const handleLogin = () => {
-    // Placeholder for Auth implementation
     Alert.alert('Authentication', 'Social login (Apple/Google) integration coming soon!');
+  };
+
+  const clearData = () => {
+    Alert.alert(
+      'Clear All Data',
+      'Are you sure you want to delete all saved cities and reset settings?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive', 
+          onPress: async () => {
+            await AsyncStorage.clear();
+            setUnit('Imperial');
+            Alert.alert('Data Cleared', 'All app data has been reset.');
+          } 
+        },
+      ]
+    );
   };
 
   return (
     <ScrollView style={styles.container}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Preferences</Text>
+        <TouchableOpacity style={styles.settingRow} onPress={toggleUnit}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Temperature Units</Text>
+            <Text style={styles.settingDescription}>{unit}</Text>
+          </View>
+          <FontAwesome name="exchange" size={16} color="#8e8e93" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>System</Text>
+        <TouchableOpacity style={styles.settingRow} onPress={clearData}>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: '#ff3b30' }]}>Reset App Data</Text>
+            <Text style={styles.settingDescription}>Remove all saved locations and settings.</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
@@ -56,36 +83,8 @@ export default function SettingsScreen() {
         <Text style={styles.helperText}>Login to sync your settings across devices.</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Daily Weather Report</Text>
-            <Text style={styles.settingDescription}>Receive a morning summary of today's forecast.</Text>
-          </View>
-          <Switch
-            value={dailyReport}
-            onValueChange={toggleDailyReport}
-            trackColor={{ false: '#767577', true: '#ff8c00' }}
-          />
-        </View>
-
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Sudden Weather Alerts</Text>
-            <Text style={styles.settingDescription}>Get notified immediately about storms or bad weather.</Text>
-          </View>
-          <Switch
-            value={suddenAlerts}
-            onValueChange={toggleSuddenAlerts}
-            trackColor={{ false: '#767577', true: '#ff8c00' }}
-          />
-        </View>
-      </View>
-
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Weather Dashboard v1.0.0</Text>
+        <Text style={styles.footerText}>Weather Dashboard v1.1.0</Text>
       </View>
     </ScrollView>
   );

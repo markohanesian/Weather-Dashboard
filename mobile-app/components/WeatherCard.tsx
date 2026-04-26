@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
+
+const { height } = Dimensions.get('window');
 
 interface WeatherCardProps {
   name: string;
@@ -7,6 +9,7 @@ interface WeatherCardProps {
   humidity: number;
   windSpeed: number;
   description: string;
+  isCurrentLocation?: boolean;
 }
 
 export const WeatherCard: React.FC<WeatherCardProps> = ({
@@ -15,74 +18,96 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
   humidity,
   windSpeed,
   description,
+  isCurrentLocation
 }) => {
   return (
-    <View style={styles.card}>
-      <Text style={styles.cityName}>{name}</Text>
-      <Text style={styles.temp}>{Math.round(temp)}°F</Text>
-      <Text style={styles.description}>{description}</Text>
-      <View style={styles.details}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Humidity</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.cityName}>{name}</Text>
+        {isCurrentLocation && <Text style={styles.currentLocationLabel}>Current Location</Text>}
+        <Text style={styles.temp}>{Math.round(temp)}°</Text>
+        <Text style={styles.description}>{description}</Text>
+      </View>
+
+      <View style={styles.detailsGrid}>
+        <View style={styles.detailCard}>
+          <Text style={styles.detailLabel}>HUMIDITY</Text>
           <Text style={styles.detailValue}>{humidity}%</Text>
         </View>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Wind Speed</Text>
-          <Text style={styles.detailValue}>{windSpeed} mph</Text>
+        <View style={styles.detailCard}>
+          <Text style={styles.detailLabel}>WIND</Text>
+          <Text style={styles.detailValue}>{Math.round(windSpeed)} mph</Text>
         </View>
+        {/* We can add more details here later like UV Index, Feels Like etc */}
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginVertical: 10,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+  container: {
+    flex: 1,
+    paddingTop: 60,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 40,
+  },
+  header: {
     alignItems: 'center',
   },
   cityName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 34,
+    fontWeight: '400',
+    color: '#333',
+    marginBottom: 4,
+  },
+  currentLocationLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
   temp: {
-    fontSize: 64,
-    fontWeight: '300',
-    color: '#ff8c00',
+    fontSize: 96,
+    fontWeight: '200',
+    color: '#333',
+    marginLeft: 15, // Optical centering for the degree symbol
   },
   description: {
-    fontSize: 18,
-    textTransform: 'capitalize',
+    fontSize: 20,
+    fontWeight: '500',
     color: '#666',
-    marginBottom: 20,
+    textTransform: 'capitalize',
   },
-  details: {
+  detailsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    gap: 15,
   },
-  detailItem: {
-    alignItems: 'center',
+  detailCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 16,
+    padding: 16,
+    width: '45%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   detailLabel: {
     fontSize: 12,
+    fontWeight: '600',
     color: '#999',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '500',
+    color: '#333',
   },
 });

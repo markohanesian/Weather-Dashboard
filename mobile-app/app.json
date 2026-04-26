@@ -30,7 +30,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Allow Weather Dashboard to use your location to show local weather alerts."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
