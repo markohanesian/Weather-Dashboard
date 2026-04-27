@@ -23,7 +23,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import PagerView from '@/components/PagerView';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { auth } from '@/services/firebaseConfig';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -40,6 +40,18 @@ interface CityWeather {
   forecast: any[];
   isCurrentLocation?: boolean;
 }
+
+const getWeatherIcon = (condition: string = '') => {
+  const cond = condition.toLowerCase();
+  if (cond.includes('clear')) return 'sun';
+  if (cond.includes('cloud')) return 'cloud';
+  if (cond.includes('rain')) return 'cloud-rain';
+  if (cond.includes('drizzle')) return 'cloud-drizzle';
+  if (cond.includes('thunderstorm')) return 'cloud-lightning';
+  if (cond.includes('snow')) return 'cloud-snow';
+  if (cond.includes('wind')) return 'wind';
+  return 'cloud';
+};
 
 export default function WeatherDashboard() {
   const router = useRouter();
@@ -120,26 +132,22 @@ export default function WeatherDashboard() {
       let savedCities: CityWeather[] = [];
       
       if (currentUser) {
-        // Load from Firebase if logged in
         const cloudData = await fetchUserData(currentUser.uid);
         if (cloudData && cloudData.savedCities) {
           savedCities = cloudData.savedCities;
         } else {
-            // If no cloud data, try local storage
             const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
             if (savedCitiesJson) {
               savedCities = JSON.parse(savedCitiesJson);
             }
         }
       } else {
-        // Load from LocalStorage if guest
         const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
         if (savedCitiesJson) {
           savedCities = JSON.parse(savedCitiesJson);
         }
       }
 
-      // Refresh weather data for all saved cities
       const refreshed = await Promise.all(savedCities.map(async (city: any) => {
         try {
           const data = await fetchWeatherByCity(city.name, currentUnits);
@@ -165,23 +173,24 @@ export default function WeatherDashboard() {
   };
 
   const processForecast = (list: any[]) => {
-    const dailyData: { [key: string]: number[] } = {};
+    const dailyData: { [key: string]: { temps: number[], condition: string } } = {};
     
     list.forEach(item => {
       const date = item.dt_txt.split(' ')[0];
-      if (!dailyData[date]) dailyData[date] = [];
-      dailyData[date].push(item.main.temp);
+      if (!dailyData[date]) dailyData[date] = { temps: [], condition: item.weather[0].main };
+      dailyData[date].temps.push(item.main.temp);
     });
 
     return Object.keys(dailyData).slice(0, 5).map(date => {
-      const temps = dailyData[date];
+      const { temps, condition } = dailyData[date];
       const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
       const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
       const minimalDay = dayName.startsWith('Th') ? 'Th' : (dayName.startsWith('Su') ? 'Su' : (dayName.startsWith('Sa') ? 'S' : dayName[0]));
       
       return {
         day: minimalDay,
-        avgTemp: Math.round(avg)
+        avgTemp: Math.round(avg),
+        condition
       };
     });
   };
@@ -220,11 +229,8 @@ export default function WeatherDashboard() {
       setCities(updatedCities);
 
       const toSave = updatedCities.filter(c => !c.isCurrentLocation);
-      
-      // Save locally
       await AsyncStorage.setItem('saved_cities', JSON.stringify(toSave));
       
-      // Sync to cloud if logged in
       if (user) {
         await syncUserData(user.uid, { savedCities: toSave });
       }
@@ -301,12 +307,23 @@ export default function WeatherDashboard() {
                   humidity={city.data.main.humidity}
                   windSpeed={city.data.wind.speed}
                   isCurrentLocation={city.isCurrentLocation}
+                  feelsLike={city.data.main.feels_like}
+                  tempMin={city.data.main.temp_min}
+                  tempMax={city.data.main.temp_max}
+                  pressure={city.data.main.pressure}
+                  condition={city.data.weather[0].main}
                 />
                 
                 <View style={styles.minimalForecastSection}>
                   {city.forecast.map((item, idx) => (
                     <View key={idx} style={styles.forecastColumn}>
                       <Text style={styles.minimalForecastDay}>{item.day}</Text>
+                      <Feather 
+                        name={getWeatherIcon(item.condition)} 
+                        size={20} 
+                        color="#666" 
+                        style={{ marginVertical: 4 }}
+                      />
                       <Text style={styles.minimalForecastTemp}>{item.avgTemp}°</Text>
                     </View>
                   ))}
@@ -442,7 +459,7 @@ const styles = StyleSheet.create({
   },
   forecastColumn: {
     alignItems: 'center',
-    gap: 8,
+    gap: 2,
   },
   minimalForecastDay: {
     fontSize: 14,
