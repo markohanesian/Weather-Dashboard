@@ -25,6 +25,9 @@ import * as Location from 'expo-location';
 import PagerView from '@/components/PagerView';
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { auth } from '@/services/firebaseConfig';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { fetchUserData, syncUserData } from '@/services/userService';
 
 const { width } = Dimensions.get('window');
 
@@ -47,38 +50,43 @@ export default function WeatherDashboard() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [activePage, setActivePage] = useState(0);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [units, setUnits] = useState('imperial');
   const pagerRef = useRef<PagerView>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        loadInitialData(units, currentUser);
+      } else {
+        loadInitialData(units, null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       checkAppStatus();
-    }, [])
+    }, [units, user])
   );
 
   const checkAppStatus = async () => {
     try {
-      const auth = await AsyncStorage.getItem('is_logged_in');
-      setIsLoggedIn(auth === 'true');
-      
       const savedUnit = await AsyncStorage.getItem('settings_units');
       const normalizedUnit = savedUnit?.toLowerCase() || 'imperial';
       
       if (normalizedUnit !== units) {
         setUnits(normalizedUnit);
-        loadInitialData(normalizedUnit); // Refresh data if units changed
+        loadInitialData(normalizedUnit, user); 
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  useEffect(() => {
-    loadInitialData(units);
-  }, []);
-
-  const loadInitialData = async (currentUnits: string) => {
+  const loadInitialData = async (currentUnits: string, currentUser: User | null) => {
     setLoading(true);
     setError('');
     try {
@@ -109,27 +117,44 @@ export default function WeatherDashboard() {
         console.warn('Location access skipped or timed out:', locErr);
       }
 
-      const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
       let savedCities: CityWeather[] = [];
-      if (savedCitiesJson) {
-        const parsed = JSON.parse(savedCitiesJson);
-        const refreshed = await Promise.all(parsed.map(async (city: any) => {
-          try {
-            const data = await fetchWeatherByCity(city.name, currentUnits);
-            const forecast = await fetchForecastByCity(city.name, currentUnits);
-            return { 
-              ...city, 
-              data, 
-              forecast: processForecast(forecast.list) 
-            };
-          } catch (e) {
-            return city;
-          }
-        }));
-        savedCities = refreshed;
+      
+      if (currentUser) {
+        // Load from Firebase if logged in
+        const cloudData = await fetchUserData(currentUser.uid);
+        if (cloudData && cloudData.savedCities) {
+          savedCities = cloudData.savedCities;
+        } else {
+            // If no cloud data, try local storage
+            const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
+            if (savedCitiesJson) {
+              savedCities = JSON.parse(savedCitiesJson);
+            }
+        }
+      } else {
+        // Load from LocalStorage if guest
+        const savedCitiesJson = await AsyncStorage.getItem('saved_cities');
+        if (savedCitiesJson) {
+          savedCities = JSON.parse(savedCitiesJson);
+        }
       }
 
-      const allCities = currentCity ? [currentCity, ...savedCities] : savedCities;
+      // Refresh weather data for all saved cities
+      const refreshed = await Promise.all(savedCities.map(async (city: any) => {
+        try {
+          const data = await fetchWeatherByCity(city.name, currentUnits);
+          const forecast = await fetchForecastByCity(city.name, currentUnits);
+          return { 
+            ...city, 
+            data, 
+            forecast: processForecast(forecast.list) 
+          };
+        } catch (e) {
+          return city;
+        }
+      }));
+      
+      const allCities = currentCity ? [currentCity, ...refreshed] : refreshed;
       setCities(allCities);
     } catch (err) {
       console.error(err);
@@ -195,7 +220,14 @@ export default function WeatherDashboard() {
       setCities(updatedCities);
 
       const toSave = updatedCities.filter(c => !c.isCurrentLocation);
+      
+      // Save locally
       await AsyncStorage.setItem('saved_cities', JSON.stringify(toSave));
+      
+      // Sync to cloud if logged in
+      if (user) {
+        await syncUserData(user.uid, { savedCities: toSave });
+      }
 
       setTimeout(() => {
         pagerRef.current?.setPage(updatedCities.length - 1);
@@ -295,7 +327,7 @@ export default function WeatherDashboard() {
         </View>
       )}
 
-      {!isLoggedIn && (
+      {!user && (
         <TouchableOpacity 
           style={styles.incentiveBanner} 
           onPress={() => router.push('/two')}

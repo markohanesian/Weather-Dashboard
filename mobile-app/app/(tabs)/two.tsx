@@ -1,15 +1,22 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import { auth } from '@/services/firebaseConfig';
+import { 
+  signInAnonymously, 
+  signOut, 
+  onAuthStateChanged,
+  User
+} from 'firebase/auth';
+import { syncUserData, fetchUserData } from '@/services/userService';
 
 // Platform-agnostic Alert helper
 const crossPlatformAlert = (title: string, message: string, buttons: { text: string, style?: string, onPress?: () => void }[]) => {
   if (Platform.OS === 'web') {
     const result = window.confirm(`${title}\n\n${message}`);
     if (result) {
-      // Execute the "confirm" action (usually the last button in our case, or the non-cancel one)
       const confirmButton = buttons.find(b => b.style !== 'cancel');
       if (confirmButton && confirmButton.onPress) confirmButton.onPress();
     }
@@ -20,7 +27,23 @@ const crossPlatformAlert = (title: string, message: string, buttons: { text: str
 
 export default function SettingsScreen() {
   const [unit, setUnit] = useState('Imperial');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+      if (currentUser) {
+        AsyncStorage.setItem('is_logged_in', 'true');
+        syncLocalDataToCloud(currentUser.uid);
+      } else {
+        AsyncStorage.setItem('is_logged_in', 'false');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,10 +55,26 @@ export default function SettingsScreen() {
     try {
       const savedUnit = await AsyncStorage.getItem('settings_units');
       if (savedUnit !== null) setUnit(savedUnit);
-      const auth = await AsyncStorage.getItem('is_logged_in');
-      if (auth !== null) setIsLoggedIn(JSON.parse(auth));
     } catch (e) {
       console.error('Failed to load settings', e);
+    }
+  };
+
+  const syncLocalDataToCloud = async (userId: string) => {
+    try {
+      const savedCities = await AsyncStorage.getItem('saved_cities');
+      const units = await AsyncStorage.getItem('settings_units');
+      const notificationsOn = await AsyncStorage.getItem('settings_notifications_on');
+      const isPro = await AsyncStorage.getItem('is_pro_user');
+
+      await syncUserData(userId, {
+        savedCities: savedCities ? JSON.parse(savedCities) : [],
+        units: units || 'Imperial',
+        notificationsOn: notificationsOn === 'true',
+        isPro: isPro === 'true'
+      });
+    } catch (e) {
+      console.error('Failed to sync local data to cloud', e);
     }
   };
 
@@ -44,13 +83,16 @@ export default function SettingsScreen() {
     setUnit(newUnit);
     try {
       await AsyncStorage.setItem('settings_units', newUnit);
+      if (user) {
+        await syncUserData(user.uid, { units: newUnit });
+      }
     } catch (e) {
       console.error('Failed to save units', e);
     }
   };
 
   const handleLogin = async () => {
-    if (isLoggedIn) {
+    if (user) {
       crossPlatformAlert(
         'Logout',
         'Are you sure you want to logout?',
@@ -60,27 +102,26 @@ export default function SettingsScreen() {
             text: 'Logout', 
             style: 'destructive',
             onPress: async () => {
-              setIsLoggedIn(false);
-              await AsyncStorage.setItem('is_logged_in', 'false');
+              try {
+                await signOut(auth);
+              } catch (e) {
+                Alert.alert('Error', 'Failed to sign out');
+              }
             } 
           }
         ]
       );
     } else {
-      crossPlatformAlert(
-        'Sign In',
-        'Choose a provider to continue (Demo: Click OK to sign in)',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Continue', 
-            onPress: async () => {
-              setIsLoggedIn(true);
-              await AsyncStorage.setItem('is_logged_in', 'true');
-            } 
-          }
-        ]
-      );
+      setLoading(true);
+      try {
+        // For demo purposes, we use anonymous sign in
+        // In a real app, you'd use Google/Apple/Email
+        await signInAnonymously(auth);
+      } catch (e) {
+        console.error(e);
+        Alert.alert('Error', 'Failed to sign in. Please check your Firebase configuration.');
+        setLoading(false);
+      }
     }
   };
 
@@ -95,9 +136,15 @@ export default function SettingsScreen() {
           style: 'destructive', 
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove(['saved_cities', 'settings_units', 'is_logged_in', 'settings_daily_report', 'settings_sudden_alerts']);
+              await AsyncStorage.multiRemove(['saved_cities', 'settings_units', 'is_logged_in', 'settings_daily_report', 'settings_sudden_alerts', 'is_pro_user']);
               setUnit('Imperial');
-              setIsLoggedIn(false);
+              if (user) {
+                await syncUserData(user.uid, {
+                  savedCities: [],
+                  units: 'Imperial',
+                  isPro: false
+                });
+              }
             } catch (e) {
               console.error('Failed to clear data', e);
             }
@@ -106,6 +153,14 @@ export default function SettingsScreen() {
       ]
     );
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#007aff" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -132,7 +187,7 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
-        {!isLoggedIn ? (
+        {!user ? (
           <View style={styles.authContainer}>
             <TouchableOpacity 
               style={[styles.socialButton, styles.appleButton]} 
@@ -151,17 +206,20 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogin}>
-            <Text style={styles.logoutButtonText}>Logout from Account</Text>
-          </TouchableOpacity>
+          <View style={styles.loggedInContainer}>
+            <Text style={styles.userEmail}>Signed in as Guest ({user.uid.substring(0, 8)}...)</Text>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogin}>
+              <Text style={styles.logoutButtonText}>Logout from Account</Text>
+            </TouchableOpacity>
+          </View>
         )}
         <Text style={styles.helperText}>
-          {isLoggedIn ? 'Your settings are synced!' : 'Sign in to sync your cities across all your devices.'}
+          {user ? 'Your settings are synced!' : 'Sign in to sync your cities across all your devices.'}
         </Text>
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Weather Dashboard v1.1.0</Text>
+        <Text style={styles.footerText}>Weather Dashboard v1.2.0</Text>
       </View>
     </ScrollView>
   );
@@ -234,8 +292,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  loggedInContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  userEmail: {
+    fontSize: 15,
+    color: '#333',
+    marginBottom: 10,
+  },
   logoutButton: {
-    marginVertical: 20,
     paddingVertical: 12,
     alignItems: 'center',
   },

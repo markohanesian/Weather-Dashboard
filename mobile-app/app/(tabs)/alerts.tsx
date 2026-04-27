@@ -4,6 +4,8 @@ import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerWeatherCheckTask, unregisterWeatherCheckTask } from '@/services/backgroundService';
 import { cancelAllNotifications, requestNotificationPermissions } from '@/services/notificationService';
+import { auth } from '@/services/firebaseConfig';
+import { syncUserData } from '@/services/userService';
 
 export default function AlertsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -31,9 +33,21 @@ export default function AlertsScreen() {
     }
   };
 
+  const syncToCloud = async (data: any) => {
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await syncUserData(user.uid, data);
+      } catch (e) {
+        console.error('Failed to sync alerts to cloud', e);
+      }
+    }
+  };
+
   const toggleNotifications = async (value: boolean) => {
     setNotificationsEnabled(value);
     await AsyncStorage.setItem('settings_notifications_on', JSON.stringify(value));
+    await syncToCloud({ notificationsOn: value });
     
     if (value) {
       const granted = await requestNotificationPermissions();
@@ -41,6 +55,7 @@ export default function AlertsScreen() {
         Alert.alert('Permission Required', 'Please enable notifications in your system settings.');
         setNotificationsEnabled(false);
         await AsyncStorage.setItem('settings_notifications_on', 'false');
+        await syncToCloud({ notificationsOn: false });
         return;
       }
       // Re-register background task if pro and enabled
@@ -56,8 +71,7 @@ export default function AlertsScreen() {
   const toggleDailyReport = async (value: boolean) => {
     setDailyReportEnabled(value);
     await AsyncStorage.setItem('settings_daily_report', JSON.stringify(value));
-    // Here we would actually schedule the daily notification 
-    // Usually done after fetching fresh data for the user's primary city
+    await syncToCloud({ dailyReport: value });
   };
 
   const toggleSevereWeather = async (value: boolean) => {
@@ -67,6 +81,7 @@ export default function AlertsScreen() {
     }
     setSevereWeatherEnabled(value);
     await AsyncStorage.setItem('settings_sudden_alerts', JSON.stringify(value));
+    await syncToCloud({ suddenAlerts: value });
     
     if (value && notificationsEnabled) {
       await registerWeatherCheckTask();
@@ -86,6 +101,7 @@ export default function AlertsScreen() {
           onPress: async () => {
             setIsPro(true);
             await AsyncStorage.setItem('is_pro_user', 'true');
+            await syncToCloud({ isPro: true });
           } 
         }
       ]
