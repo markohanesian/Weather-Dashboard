@@ -8,6 +8,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -66,7 +68,7 @@ export async function scheduleDailyWeatherNotification(hour: number, minute: num
       hour: hour,
       minute: minute,
       repeats: true,
-    },
+    } as any,
   });
 }
 
