@@ -8,9 +8,14 @@ import * as Notifications from 'expo-notifications';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import { registerWeatherCheckTask } from '@/services/backgroundService';
+import { configureGoogleSignIn } from '@/services/socialAuthService';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Configure Google Sign-In
+configureGoogleSignIn();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -64,11 +69,16 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </ThemeProvider>
+    <StripeProvider
+      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+      merchantIdentifier="merchant.com.weatherdashboard" // required for Apple Pay
+    >
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+      </ThemeProvider>
+    </StripeProvider>
   );
 }

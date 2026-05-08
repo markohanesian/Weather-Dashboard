@@ -11,6 +11,7 @@ import {
   User
 } from 'firebase/auth';
 import { syncUserData, fetchUserData } from '@/services/userService';
+import { signInWithGoogle, signInWithApple } from '@/services/socialAuthService';
 
 // Platform-agnostic Alert helper
 const crossPlatformAlert = (title: string, message: string, buttons: { text: string, style?: string, onPress?: () => void }[]) => {
@@ -91,38 +92,47 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleLogin = async () => {
-    if (user) {
-      crossPlatformAlert(
-        'Logout',
-        'Are you sure you want to logout?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Logout', 
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await signOut(auth);
-              } catch (e) {
-                Alert.alert('Error', 'Failed to sign out');
-              }
-            } 
-          }
-        ]
-      );
-    } else {
-      setLoading(true);
-      try {
-        // For demo purposes, we use anonymous sign in
-        // In a real app, you'd use Google/Apple/Email
-        await signInAnonymously(auth);
-      } catch (e) {
-        console.error(e);
-        Alert.alert('Error', 'Failed to sign in. Please check your Firebase configuration.');
-        setLoading(false);
-      }
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle(auth);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Google Sign-In Error', 'Failed to sign in with Google.');
+      setLoading(false);
     }
+  };
+
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    try {
+      await signInWithApple(auth);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Apple Sign-In Error', 'Failed to sign in with Apple.');
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    crossPlatformAlert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut(auth);
+            } catch (e) {
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          } 
+        }
+      ]
+    );
   };
 
   const clearData = () => {
@@ -191,7 +201,7 @@ export default function SettingsScreen() {
           <View style={styles.authContainer}>
             <TouchableOpacity 
               style={[styles.socialButton, styles.appleButton]} 
-              onPress={handleLogin}
+              onPress={handleAppleLogin}
             >
               <FontAwesome name="apple" size={20} color="#fff" />
               <Text style={styles.socialButtonText}>Sign in with Apple</Text>
@@ -199,7 +209,7 @@ export default function SettingsScreen() {
             
             <TouchableOpacity 
               style={[styles.socialButton, styles.googleButton]} 
-              onPress={handleLogin}
+              onPress={handleGoogleLogin}
             >
               <FontAwesome name="google" size={18} color="#444" />
               <Text style={[styles.socialButtonText, { color: '#444' }]}>Sign in with Google</Text>
@@ -207,8 +217,8 @@ export default function SettingsScreen() {
           </View>
         ) : (
           <View style={styles.loggedInContainer}>
-            <Text style={styles.userEmail}>Signed in as Guest ({user.uid.substring(0, 8)}...)</Text>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogin}>
+            <Text style={styles.userEmail}>Signed in as {user.isAnonymous ? 'Guest' : (user.email || 'User')} ({user.uid.substring(0, 8)}...)</Text>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Logout from Account</Text>
             </TouchableOpacity>
           </View>

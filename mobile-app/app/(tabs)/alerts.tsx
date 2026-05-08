@@ -90,18 +90,44 @@ export default function AlertsScreen() {
     }
   };
 
-  const handleProAction = () => {
+  const handleProAction = async () => {
     Alert.alert(
       "Upgrade to Pro",
-      "Dynamic notifications (Snow, Rain, High Winds) are only available in the Pro version. Would you like to upgrade?",
+      "Dynamic notifications (Snow, Rain, High Winds) are only available in the Pro version. Upgrade for a one-time fee of $4.99?",
       [
         { text: "Maybe Later", style: "cancel" },
         { 
           text: "Upgrade Now", 
           onPress: async () => {
-            setIsPro(true);
-            await AsyncStorage.setItem('is_pro_user', 'true');
-            await syncToCloud({ isPro: true });
+            if (Platform.OS === 'web') {
+              // Fallback for web testing since Stripe SDK is native
+              setIsPro(true);
+              await AsyncStorage.setItem('is_pro_user', 'true');
+              await syncToCloud({ isPro: true });
+              Alert.alert("Success", "Web-simulated upgrade complete!");
+              return;
+            }
+
+            try {
+              // Real Stripe Flow
+              const { initializePayment, openPaymentSheet } = require('@/services/paymentService');
+              
+              const initialized = await initializePayment(499); // $4.99
+              if (!initialized) {
+                Alert.alert("Payment Error", "Could not initialize payment sheet. Please try again later.");
+                return;
+              }
+
+              const success = await openPaymentSheet();
+              if (success) {
+                setIsPro(true);
+                await AsyncStorage.setItem('is_pro_user', 'true');
+                await syncToCloud({ isPro: true });
+              }
+            } catch (err) {
+              console.error('Stripe Flow Error:', err);
+              Alert.alert("Error", "Something went wrong with the payment process.");
+            }
           } 
         }
       ]

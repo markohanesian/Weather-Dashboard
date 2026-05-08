@@ -36,7 +36,10 @@
         {
           "locationAlwaysPermission": "Allow Weather Dashboard to use your location to show local weather alerts."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-apple-authentication",
+      "@stripe/stripe-react-native"
     ],
     "experiments": {
       "typedRoutes": true
