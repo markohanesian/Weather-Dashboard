@@ -1,32 +1,68 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
 import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import Stripe from "stripe";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Set global options for performance and cost control
+setGlobalOptions({maxInstances: 10});
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+// Define a variable to hold the Stripe instance (lazy initialization)
+let stripeInstance: InstanceType<typeof Stripe> | null = null;
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+const getStripe = () => {
+  if (!stripeInstance) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error("STRIPE_SECRET_KEY is not set in environment.");
+    }
+    stripeInstance = new Stripe(key, {
+      apiVersion: "2026-04-22.dahlia",
+    });
+  }
+  return stripeInstance;
+};
+
+/**
+ * Creates a Stripe PaymentIntent for the Weather Dashboard Pro upgrade.
+ */
+export const createPaymentIntent = onCall({
+  secrets: ["STRIPE_SECRET_KEY"],
+}, async (request) => {
+  // 1. Ensure the user is authenticated
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  const {amount = 499, currency = "usd"} = request.data;
+
+  try {
+    // 2. Initialize Stripe lazily and create the PaymentIntent
+    const stripe = getStripe();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+      metadata: {
+        userId: request.auth.uid,
+        userEmail: request.auth.token.email || "unknown",
+        plan: "pro_upgrade_one_time",
+      },
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    logger.info(`Payment created for user ${request.auth.uid}`);
+
+    // 3. Return the clientSecret to the app
+    return {
+      clientSecret: paymentIntent.client_secret,
+    };
+  } catch (error: unknown) {
+    logger.error("Stripe Error:", error);
+    const message = error instanceof Error ? error.message : "Payment failed";
+    throw new HttpsError("internal", message);
+  }
+});
