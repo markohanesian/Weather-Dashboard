@@ -1,7 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Dimensions, useColorScheme } from 'react-native';
+import Animated, { 
+  FadeInDown, 
+  FadeIn, 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  withSequence 
+} from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import Colors from '@/constants/Colors';
 
 const { width } = Dimensions.get('window');
 
@@ -46,6 +56,29 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
   pressure,
   condition
 }) => {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? Colors.dark : Colors.light;
+
+  const floatValue = useSharedValue(0);
+
+  useEffect(() => {
+    floatValue.value = withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 2000 }),
+        withTiming(0, { duration: 2000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedIconStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: floatValue.value }],
+    };
+  });
+
   return (
     <Animated.View 
       entering={FadeIn.duration(800)} 
@@ -55,23 +88,23 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
         entering={FadeInDown.delay(200).duration(800)} 
         style={styles.header}
       >
-        <Text style={styles.cityName}>{name}</Text>
-        {isCurrentLocation && <Text style={styles.currentLocationLabel}>Current Location</Text>}
+        <Text style={[styles.cityName, { color: theme.text }]}>{name}</Text>
+        {isCurrentLocation && <Text style={[styles.currentLocationLabel, { color: theme.text, opacity: 0.6 }]}>Current Location</Text>}
         
-        <View style={styles.iconContainer}>
-          <Feather name={getWeatherIcon(condition)} size={64} color="#333" />
-        </View>
+        <Animated.View style={[styles.iconContainer, animatedIconStyle]}>
+          <Feather name={getWeatherIcon(condition)} size={100} color={theme.text} />
+        </Animated.View>
 
         <View style={styles.tempContainer}>
-          <Text style={styles.temp}>{Math.round(temp)}°</Text>
-          <Text style={styles.unit}>{unit}</Text>
+          <Text style={[styles.temp, { color: theme.text }]}>{Math.round(temp)}°</Text>
+          <Text style={[styles.unit, { color: theme.text }]}>{unit}</Text>
         </View>
         
-        <Text style={styles.description}>{description}</Text>
+        <Text style={[styles.description, { color: theme.text, opacity: 0.8 }]}>{description}</Text>
         
         <View style={styles.highLowContainer}>
-          <Text style={styles.highLowText}>H: {Math.round(tempMax)}°</Text>
-          <Text style={styles.highLowText}>L: {Math.round(tempMin)}°</Text>
+          <Text style={[styles.highLowText, { color: theme.text }]}>H: {Math.round(tempMax)}°</Text>
+          <Text style={[styles.highLowText, { color: theme.text }]}>L: {Math.round(tempMin)}°</Text>
         </View>
       </Animated.View>
 
@@ -80,41 +113,51 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
           label="FEELS LIKE" 
           value={`${Math.round(feelsLike)}°`} 
           delay={400} 
+          isDark={isDark}
+          theme={theme}
         />
         <DetailCard 
           label="HUMIDITY" 
           value={`${humidity}%`} 
           delay={500} 
+          isDark={isDark}
+          theme={theme}
         />
         <DetailCard 
           label="WIND" 
           value={`${Math.round(windSpeed)} ${unit === 'F' ? 'mph' : 'm/s'}`} 
           delay={600} 
+          isDark={isDark}
+          theme={theme}
         />
         <DetailCard 
           label="PRESSURE" 
           value={`${pressure} hPa`} 
           delay={700} 
+          isDark={isDark}
+          theme={theme}
         />
       </View>
     </Animated.View>
   );
 };
 
-const DetailCard = ({ label, value, delay }: { label: string; value: string; delay: number }) => (
+const DetailCard = ({ label, value, delay, isDark, theme }: { label: string; value: string; delay: number; isDark: boolean; theme: any }) => (
   <Animated.View 
     entering={FadeInDown.delay(delay).duration(600)} 
-    style={styles.detailCard}
+    style={styles.detailCardWrapper}
   >
-    <Text style={styles.detailLabel}>{label}</Text>
-    <Text style={styles.detailValue}>{value}</Text>
+    <BlurView intensity={isDark ? 40 : 60} tint={isDark ? "dark" : "light"} style={styles.detailCardBlur}>
+      <Text style={[styles.detailLabel, { color: theme.text, opacity: 0.5 }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: theme.text }]}>{value}</Text>
+    </BlurView>
   </Animated.View>
 );
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 40,
+    paddingTop: 20,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBottom: 20,
@@ -126,17 +169,17 @@ const styles = StyleSheet.create({
   cityName: {
     fontSize: 34,
     fontWeight: '400',
-    color: '#333',
     marginBottom: 4,
   },
   currentLocationLabel: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 8,
     fontWeight: '500',
   },
   iconContainer: {
-    marginVertical: 10,
+    marginVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tempContainer: {
     flexDirection: 'row',
@@ -146,18 +189,15 @@ const styles = StyleSheet.create({
   temp: {
     fontSize: 96,
     fontWeight: '200',
-    color: '#333',
   },
   unit: {
     fontSize: 24,
     fontWeight: '300',
-    color: '#333',
     marginTop: 20,
   },
   description: {
     fontSize: 20,
     fontWeight: '500',
-    color: '#666',
     textTransform: 'capitalize',
     marginBottom: 8,
   },
@@ -168,39 +208,33 @@ const styles = StyleSheet.create({
   highLowText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
   },
   detailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     width: '100%',
-    paddingHorizontal: 20,
-    gap: 15,
+    paddingHorizontal: 15,
+    gap: 12,
     marginTop: 20,
   },
-  detailCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 16,
+  detailCardWrapper: {
+    width: '46%',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  detailCardBlur: {
     padding: 16,
-    width: '45%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    height: 100,
+    justifyContent: 'center',
   },
   detailLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   detailValue: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '300',
   },
 });

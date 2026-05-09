@@ -10,8 +10,12 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
-  Dimensions
+  Dimensions,
+  useColorScheme
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import Colors from '@/constants/Colors';
 import { WeatherCard } from '@/components/WeatherCard';
 import { 
   fetchWeatherByCity, 
@@ -30,6 +34,21 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { fetchUserData, syncUserData } from '@/services/userService';
 
 const { width } = Dimensions.get('window');
+
+const getBackgroundColors = (condition: string = '', isDark: boolean): string[] => {
+  const cond = condition.toLowerCase();
+  if (isDark) {
+    if (cond.includes('clear')) return ['#1a2a6c', '#b21f1f', '#fdbb2d']; // Sunset/Night
+    if (cond.includes('cloud')) return ['#232526', '#414345'];
+    if (cond.includes('rain')) return ['#0f2027', '#203a43', '#2c5364'];
+    return ['#000000', '#434343'];
+  } else {
+    if (cond.includes('clear')) return ['#4facfe', '#00f2fe'];
+    if (cond.includes('cloud')) return ['#bdc3c7', '#2c3e50'];
+    if (cond.includes('rain')) return ['#4b6cb7', '#182848'];
+    return ['#fff', '#eee'];
+  }
+};
 
 interface CityWeather {
   id: string;
@@ -55,6 +74,10 @@ const getWeatherIcon = (condition: string = '') => {
 
 export default function WeatherDashboard() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? Colors.dark : Colors.light;
+  
   const [cities, setCities] = useState<CityWeather[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -65,6 +88,10 @@ export default function WeatherDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [units, setUnits] = useState('imperial');
   const pagerRef = useRef<PagerView>(null);
+
+  const activeCity = cities[activePage];
+  const activeCondition = activeCity?.data?.weather[0]?.main || '';
+  const backgroundColors = getBackgroundColors(activeCondition, isDark);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -251,9 +278,9 @@ export default function WeatherDashboard() {
 
   if (loading && cities.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007aff" />
-        <Text style={{ marginTop: 20, color: '#666' }}>Fetching local weather...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.tint} />
+        <Text style={{ marginTop: 20, color: theme.text, opacity: 0.6 }}>Fetching local weather...</Text>
       </View>
     );
   }
@@ -261,139 +288,147 @@ export default function WeatherDashboard() {
   const unitLabel = units === 'imperial' ? 'F' : 'C';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      <View style={styles.header}>
-        <View style={{ width: 40 }} /> 
-        <Text style={styles.headerTitle}>Weather</Text>
-        <TouchableOpacity 
-          style={styles.addButton} 
-          onPress={() => setSearchModalVisible(true)}
-        >
-          <FontAwesome name="plus" size={20} color="#007aff" />
-        </TouchableOpacity>
-      </View>
-
-      {cities.length > 1 && (
-        <View style={styles.paginationDots}>
-          {cities.map((_, index) => (
-            <View 
-              key={index} 
-              style={[
-                styles.dot, 
-                activePage === index ? styles.activeDot : styles.inactiveDot
-              ]} 
-            />
-          ))}
-        </View>
-      )}
-
-      {cities.length > 0 ? (
-        <View style={styles.mainContent}>
-          <PagerView 
-            style={styles.pager} 
-            initialPage={0} 
-            ref={pagerRef}
-            onPageSelected={(e) => setActivePage(e.nativeEvent.position)}
-          >
-            {cities.map((city) => (
-              <ScrollView key={city.id} style={styles.page} showsVerticalScrollIndicator={false}>
-                <WeatherCard
-                  name={city.name}
-                  temp={city.data.main.temp}
-                  unit={unitLabel}
-                  description={city.data.weather[0].description}
-                  humidity={city.data.main.humidity}
-                  windSpeed={city.data.wind.speed}
-                  isCurrentLocation={city.isCurrentLocation}
-                  feelsLike={city.data.main.feels_like}
-                  tempMin={city.data.main.temp_min}
-                  tempMax={city.data.main.temp_max}
-                  pressure={city.data.main.pressure}
-                  condition={city.data.weather[0].main}
-                />
-                
-                <View style={styles.minimalForecastSection}>
-                  {city.forecast.map((item, idx) => (
-                    <View key={idx} style={styles.forecastColumn}>
-                      <Text style={styles.minimalForecastDay}>{item.day}</Text>
-                      <Feather 
-                        name={getWeatherIcon(item.condition)} 
-                        size={20} 
-                        color="#666" 
-                        style={{ marginVertical: 4 }}
-                      />
-                      <Text style={styles.minimalForecastTemp}>{item.avgTemp}°</Text>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-            ))}
-          </PagerView>
-        </View>
-      ) : (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error || 'No locations added yet.'}</Text>
+    <View style={styles.container}>
+      <LinearGradient colors={backgroundColors} style={StyleSheet.absoluteFill} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+        
+        <View style={styles.header}>
+          <View style={{ width: 40 }} /> 
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Weather</Text>
           <TouchableOpacity 
-            style={styles.retryButton} 
+            style={styles.addButton} 
             onPress={() => setSearchModalVisible(true)}
           >
-            <Text style={styles.retryText}>Add a City</Text>
+            <FontAwesome name="plus" size={20} color={theme.text} />
           </TouchableOpacity>
         </View>
-      )}
 
-      {!user && (
-        <TouchableOpacity 
-          style={styles.incentiveBanner} 
-          onPress={() => router.push('/two')}
-        >
-          <View style={styles.bannerContent}>
-            <FontAwesome name="cloud-upload" size={18} color="#fff" />
-            <Text style={styles.bannerText}>Sign in to sync your cities across devices</Text>
-          </View>
-          <FontAwesome name="chevron-right" size={14} color="rgba(255,255,255,0.7)" />
-        </TouchableOpacity>
-      )}
-
-      <Modal
-        visible={searchModalVisible}
-        animationType="slide"
-        transparent={false}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search for a city"
-              value={query}
-              onChangeText={handleSearch}
-              autoFocus
-            />
-            <TouchableOpacity onPress={() => setSearchModalVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.resultsContainer}>
-            {suggestions.map((loc, index) => (
-              <TouchableOpacity 
-                key={`${loc.lat}-${loc.lon}-${index}`} 
-                style={styles.resultItem} 
-                onPress={() => addCity(loc)}
-              >
-                <Text style={styles.resultText}>
-                  {loc.name}, {loc.state ? `${loc.state}, ` : ''}{loc.country}
-                </Text>
-              </TouchableOpacity>
+        {cities.length > 1 && (
+          <View style={styles.paginationDots}>
+            {cities.map((_, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.dot, 
+                  activePage === index 
+                    ? { backgroundColor: theme.text } 
+                    : { backgroundColor: theme.text, opacity: 0.3 }
+                ]} 
+              />
             ))}
           </View>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+        )}
+
+        {cities.length > 0 ? (
+          <View style={styles.mainContent}>
+            <PagerView 
+              style={styles.pager} 
+              initialPage={0} 
+              ref={pagerRef}
+              onPageSelected={(e) => setActivePage(e.nativeEvent.position)}
+            >
+              {cities.map((city) => (
+                <ScrollView key={city.id} style={styles.page} showsVerticalScrollIndicator={false}>
+                  <WeatherCard
+                    name={city.name}
+                    temp={city.data.main.temp}
+                    unit={unitLabel}
+                    description={city.data.weather[0].description}
+                    humidity={city.data.main.humidity}
+                    windSpeed={city.data.wind.speed}
+                    isCurrentLocation={city.isCurrentLocation}
+                    feelsLike={city.data.main.feels_like}
+                    tempMin={city.data.main.temp_min}
+                    tempMax={city.data.main.temp_max}
+                    pressure={city.data.main.pressure}
+                    condition={city.data.weather[0].main}
+                  />
+                  
+                  <BlurView intensity={isDark ? 40 : 60} tint={isDark ? "dark" : "light"} style={styles.minimalForecastSection}>
+                    {city.forecast.map((item, idx) => (
+                      <View key={idx} style={styles.forecastColumn}>
+                        <Text style={[styles.minimalForecastDay, { color: theme.text, opacity: 0.6 }]}>{item.day}</Text>
+                        <Feather 
+                          name={getWeatherIcon(item.condition)} 
+                          size={20} 
+                          color={theme.text} 
+                          style={{ marginVertical: 4 }}
+                        />
+                        <Text style={[styles.minimalForecastTemp, { color: theme.text }]}>{item.avgTemp}°</Text>
+                      </View>
+                    ))}
+                  </BlurView>
+                  <View style={{ height: 40 }} />
+                </ScrollView>
+              ))}
+            </PagerView>
+          </View>
+        ) : (
+          <View style={styles.centered}>
+            <Text style={[styles.errorText, { color: theme.text }]}>{error || 'No locations added yet.'}</Text>
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: theme.tint }]} 
+              onPress={() => setSearchModalVisible(true)}
+            >
+              <Text style={[styles.retryText, { color: isDark ? '#000' : '#fff' }]}>Add a City</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!user && (
+          <TouchableOpacity 
+            style={[styles.incentiveBanner, { backgroundColor: theme.tint }]} 
+            onPress={() => router.push('/two')}
+          >
+            <View style={styles.bannerContent}>
+              <FontAwesome name="cloud-upload" size={18} color={isDark ? '#000' : '#fff'} />
+              <Text style={[styles.bannerText, { color: isDark ? '#000' : '#fff' }]}>Sign in to sync your cities across devices</Text>
+            </View>
+            <FontAwesome name="chevron-right" size={14} color={isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)'} />
+          </TouchableOpacity>
+        )}
+
+        <Modal
+          visible={searchModalVisible}
+          animationType="slide"
+          transparent={false}
+        >
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+            <View style={styles.modalHeader}>
+              <TextInput
+                style={[styles.searchInput, { backgroundColor: isDark ? '#222' : '#eee', color: theme.text }]}
+                placeholder="Search for a city"
+                placeholderTextColor={isDark ? '#666' : '#999'}
+                value={query}
+                onChangeText={handleSearch}
+                autoFocus
+              />
+              <TouchableOpacity onPress={() => setSearchModalVisible(false)}>
+                <Text style={[styles.cancelText, { color: theme.tint }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.resultsContainer}>
+              {suggestions.map((loc, index) => (
+                <TouchableOpacity 
+                  key={`${loc.lat}-${loc.lon}-${index}`} 
+                  style={[styles.resultItem, { borderBottomColor: isDark ? '#333' : '#eee' }]} 
+                  onPress={() => addCity(loc)}
+                >
+                  <Text style={[styles.resultText, { color: theme.text }]}>
+                    {loc.name}, {loc.state ? `${loc.state}, ` : ''}{loc.country}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </SafeAreaView>
+        </Modal>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -450,12 +485,10 @@ const styles = StyleSheet.create({
   minimalForecastSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     margin: 15,
     borderRadius: 16,
     padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    overflow: 'hidden',
   },
   forecastColumn: {
     alignItems: 'center',
