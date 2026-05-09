@@ -87,11 +87,20 @@ export default function WeatherDashboard() {
   const [activePage, setActivePage] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [units, setUnits] = useState('imperial');
+  const [currentTime, setCurrentTime] = useState(new Date());
   const pagerRef = useRef<PagerView>(null);
 
   const activeCity = cities[activePage];
   const activeCondition = activeCity?.data?.weather[0]?.main || '';
   const backgroundColors = getBackgroundColors(activeCondition, isDark);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formattedDate = currentTime.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -294,14 +303,20 @@ export default function WeatherDashboard() {
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
         
         <View style={styles.header}>
-          <View style={{ width: 40 }} /> 
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Weather</Text>
-          <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={() => setSearchModalVisible(true)}
-          >
-            <FontAwesome name="plus" size={20} color={theme.text} />
-          </TouchableOpacity>
+          <View style={styles.headerTop}>
+            <Text style={[styles.dateTimeText, { color: theme.text }]}>
+              {formattedDate} • {formattedTime}
+            </Text>
+            <TouchableOpacity 
+              style={styles.addButton} 
+              onPress={() => setSearchModalVisible(true)}
+            >
+              <FontAwesome name="plus" size={20} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.naturalStatusText, { color: theme.text }]}>
+            Here's the current weather in
+          </Text>
         </View>
 
         {cities.length > 1 && (
@@ -425,7 +440,7 @@ export default function WeatherDashboard() {
           </SafeAreaView>
         </Modal>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -442,18 +457,28 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 5,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 50,
+    marginBottom: 5,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+  dateTimeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    opacity: 0.8,
+  },
+  naturalStatusText: {
+    fontSize: 16,
+    fontWeight: '400',
+    opacity: 0.7,
   },
   addButton: {
-    padding: 10,
+    padding: 5,
   },
   paginationDots: {
     flexDirection: 'row',

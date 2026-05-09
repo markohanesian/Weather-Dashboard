@@ -33,17 +33,17 @@ export default function TabLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: 'Alerts',
-          headerTitle: 'Weather Alerts',
-          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+          title: 'Settings',
+          headerTitle: 'App Settings',
+          tabBarIcon: ({ color }) => <TabBarIcon name="gear" color={color} />,
         }}
       />
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Settings',
-          headerTitle: 'User Settings',
-          tabBarIcon: ({ color }) => <TabBarIcon name="gear" color={color} />,
+          title: 'Account',
+          headerTitle: 'My Account',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
     </Tabs>

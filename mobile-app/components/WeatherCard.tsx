@@ -92,7 +92,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({
         {isCurrentLocation && <Text style={[styles.currentLocationLabel, { color: theme.text, opacity: 0.6 }]}>Current Location</Text>}
         
         <Animated.View style={[styles.iconContainer, animatedIconStyle]}>
-          <Feather name={getWeatherIcon(condition)} size={100} color={theme.text} />
+          <Feather name={getWeatherIcon(condition)} size={80} color={theme.text} />
         </Animated.View>
 
         <View style={styles.tempContainer}>

@@ -26,8 +26,7 @@ const crossPlatformAlert = (title: string, message: string, buttons: { text: str
   }
 };
 
-export default function SettingsScreen() {
-  const [unit, setUnit] = useState('Imperial');
+export default function AccountScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,62 +34,9 @@ export default function SettingsScreen() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
-      if (currentUser) {
-        AsyncStorage.setItem('is_logged_in', 'true');
-        syncLocalDataToCloud(currentUser.uid);
-      } else {
-        AsyncStorage.setItem('is_logged_in', 'false');
-      }
     });
-
     return () => unsubscribe();
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadSettings();
-    }, [])
-  );
-
-  const loadSettings = async () => {
-    try {
-      const savedUnit = await AsyncStorage.getItem('settings_units');
-      if (savedUnit !== null) setUnit(savedUnit);
-    } catch (e) {
-      console.error('Failed to load settings', e);
-    }
-  };
-
-  const syncLocalDataToCloud = async (userId: string) => {
-    try {
-      const savedCities = await AsyncStorage.getItem('saved_cities');
-      const units = await AsyncStorage.getItem('settings_units');
-      const notificationsOn = await AsyncStorage.getItem('settings_notifications_on');
-      const isPro = await AsyncStorage.getItem('is_pro_user');
-
-      await syncUserData(userId, {
-        savedCities: savedCities ? JSON.parse(savedCities) : [],
-        units: units || 'Imperial',
-        notificationsOn: notificationsOn === 'true',
-        isPro: isPro === 'true'
-      });
-    } catch (e) {
-      console.error('Failed to sync local data to cloud', e);
-    }
-  };
-
-  const toggleUnit = async () => {
-    const newUnit = unit === 'Imperial' ? 'Metric' : 'Imperial';
-    setUnit(newUnit);
-    try {
-      await AsyncStorage.setItem('settings_units', newUnit);
-      if (user) {
-        await syncUserData(user.uid, { units: newUnit });
-      }
-    } catch (e) {
-      console.error('Failed to save units', e);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -147,7 +93,6 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await AsyncStorage.multiRemove(['saved_cities', 'settings_units', 'is_logged_in', 'settings_daily_report', 'settings_sudden_alerts', 'is_pro_user']);
-              setUnit('Imperial');
               if (user) {
                 await syncUserData(user.uid, {
                   savedCities: [],
@@ -155,6 +100,7 @@ export default function SettingsScreen() {
                   isPro: false
                 });
               }
+              Alert.alert('Success', 'Local data has been reset.');
             } catch (e) {
               console.error('Failed to clear data', e);
             }
@@ -174,27 +120,6 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        <TouchableOpacity style={styles.settingRow} onPress={toggleUnit}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Temperature Units</Text>
-            <Text style={styles.settingDescription}>{unit}</Text>
-          </View>
-          <FontAwesome name="exchange" size={16} color="#8e8e93" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>System</Text>
-        <TouchableOpacity style={styles.settingRow} onPress={clearData}>
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: '#ff3b30' }]}>Reset App Data</Text>
-            <Text style={styles.settingDescription}>Remove all saved locations and settings.</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         {!user ? (
@@ -217,15 +142,28 @@ export default function SettingsScreen() {
           </View>
         ) : (
           <View style={styles.loggedInContainer}>
-            <Text style={styles.userEmail}>Signed in as {user.isAnonymous ? 'Guest' : (user.email || 'User')} ({user.uid.substring(0, 8)}...)</Text>
+            <View style={styles.profileHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{user.displayName ? user.displayName[0] : (user.email ? user.email[0] : 'U')}</Text>
+              </View>
+              <Text style={styles.welcomeText}>Hello, {user.displayName || (user.email ? user.email.split('@')[0] : 'User')}</Text>
+              <Text style={styles.userEmail}>{user.email || 'Anonymous Guest'}</Text>
+            </View>
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Logout from Account</Text>
             </TouchableOpacity>
           </View>
         )}
-        <Text style={styles.helperText}>
-          {user ? 'Your settings are synced!' : 'Sign in to sync your cities across all your devices.'}
-        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Data Management</Text>
+        <TouchableOpacity style={styles.settingRow} onPress={clearData}>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: '#ff3b30' }]}>Reset Local App Data</Text>
+            <Text style={styles.settingDescription}>Remove all saved locations and local preferences.</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.footer}>
@@ -260,8 +198,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#c6c6c8',
   },
   settingInfo: {
     flex: 1,
@@ -304,27 +240,49 @@ const styles = StyleSheet.create({
   },
   loggedInContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 30,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#007aff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  welcomeText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
   },
   userEmail: {
-    fontSize: 15,
-    color: '#333',
-    marginBottom: 10,
+    fontSize: 14,
+    color: '#8e8e93',
+    marginTop: 4,
   },
   logoutButton: {
     paddingVertical: 12,
     alignItems: 'center',
+    width: '100%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#c6c6c8',
+    marginTop: 10,
   },
   logoutButtonText: {
     color: '#ff3b30',
     fontSize: 17,
     fontWeight: '400',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginBottom: 20,
-    textAlign: 'center',
   },
   footer: {
     marginTop: 40,

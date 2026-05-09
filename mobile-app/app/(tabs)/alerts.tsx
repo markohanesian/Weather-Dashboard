@@ -1,21 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Switch, Text, View, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from 'expo-router';
 import { registerWeatherCheckTask, unregisterWeatherCheckTask } from '@/services/backgroundService';
 import { cancelAllNotifications, requestNotificationPermissions } from '@/services/notificationService';
 import { auth } from '@/services/firebaseConfig';
 import { syncUserData } from '@/services/userService';
 
-export default function AlertsScreen() {
+export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [dailyReportEnabled, setDailyReportEnabled] = useState(false);
   const [severeWeatherEnabled, setSevereWeatherEnabled] = useState(false);
+  const [unit, setUnit] = useState('Imperial');
   const [isPro, setIsPro] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadSettings();
+    }, [])
+  );
 
   const loadSettings = async () => {
     try {
@@ -23,11 +27,13 @@ export default function AlertsScreen() {
       const daily = await AsyncStorage.getItem('settings_daily_report');
       const sudden = await AsyncStorage.getItem('settings_sudden_alerts');
       const pro = await AsyncStorage.getItem('is_pro_user');
+      const savedUnit = await AsyncStorage.getItem('settings_units');
 
       if (on !== null) setNotificationsEnabled(JSON.parse(on));
       if (daily !== null) setDailyReportEnabled(JSON.parse(daily));
       if (sudden !== null) setSevereWeatherEnabled(JSON.parse(sudden));
       if (pro !== null) setIsPro(JSON.parse(pro));
+      if (savedUnit !== null) setUnit(savedUnit);
     } catch (e) {
       console.error(e);
     }
@@ -39,8 +45,19 @@ export default function AlertsScreen() {
       try {
         await syncUserData(user.uid, data);
       } catch (e) {
-        console.error('Failed to sync alerts to cloud', e);
+        console.error('Failed to sync settings to cloud', e);
       }
+    }
+  };
+
+  const toggleUnit = async () => {
+    const newUnit = unit === 'Imperial' ? 'Metric' : 'Imperial';
+    setUnit(newUnit);
+    try {
+      await AsyncStorage.setItem('settings_units', newUnit);
+      await syncToCloud({ units: newUnit });
+    } catch (e) {
+      console.error('Failed to save units', e);
     }
   };
 
@@ -58,7 +75,6 @@ export default function AlertsScreen() {
         await syncToCloud({ notificationsOn: false });
         return;
       }
-      // Re-register background task if pro and enabled
       if (isPro && severeWeatherEnabled) {
         await registerWeatherCheckTask();
       }
@@ -100,7 +116,6 @@ export default function AlertsScreen() {
           text: "Upgrade Now", 
           onPress: async () => {
             if (Platform.OS === 'web') {
-              // Fallback for web testing since Stripe SDK is native
               setIsPro(true);
               await AsyncStorage.setItem('is_pro_user', 'true');
               await syncToCloud({ isPro: true });
@@ -109,10 +124,8 @@ export default function AlertsScreen() {
             }
 
             try {
-              // Real Stripe Flow
               const { initializePayment, openPaymentSheet } = require('@/services/paymentService');
-              
-              const initialized = await initializePayment(499); // $4.99
+              const initialized = await initializePayment(499);
               if (!initialized) {
                 Alert.alert("Payment Error", "Could not initialize payment sheet. Please try again later.");
                 return;
@@ -137,9 +150,20 @@ export default function AlertsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Status</Text>
-        <View style={styles.row}>
-          <Text style={styles.label}>Notifications {notificationsEnabled ? 'On' : 'Off'}</Text>
+        <Text style={styles.sectionTitle}>General Preferences</Text>
+        <TouchableOpacity style={styles.row} onPress={toggleUnit}>
+          <View style={styles.labelContainer}>
+            <Text style={styles.label}>Temperature Units</Text>
+            <Text style={styles.subLabel}>{unit}</Text>
+          </View>
+          <FontAwesome name="exchange" size={16} color="#8e8e93" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Weather Alerts</Text>
+        <View style={[styles.row, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#c6c6c8' }]}>
+          <Text style={styles.label}>Enable Notifications</Text>
           <Switch 
             value={notificationsEnabled} 
             onValueChange={toggleNotifications}
@@ -147,11 +171,8 @@ export default function AlertsScreen() {
             thumbColor={notificationsEnabled ? "#fff" : "#f4f3f4"}
           />
         </View>
-      </View>
 
-      <View style={[styles.section, !notificationsEnabled && styles.disabled]}>
-        <Text style={styles.sectionTitle}>Free Tier</Text>
-        <View style={styles.row}>
+        <View style={[styles.row, !notificationsEnabled && styles.disabled]}>
           <View style={styles.labelContainer}>
             <Text style={styles.label}>Daily Weather Report</Text>
             <Text style={styles.subLabel}>Morning summary of the day's forecast</Text>
@@ -166,7 +187,7 @@ export default function AlertsScreen() {
 
       <View style={[styles.section, !notificationsEnabled && styles.disabled]}>
         <View style={styles.headerWithBadge}>
-          <Text style={styles.sectionTitle}>Pro Tier</Text>
+          <Text style={styles.sectionTitle}>Pro Features</Text>
           {!isPro && <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>}
         </View>
         
@@ -177,7 +198,7 @@ export default function AlertsScreen() {
         >
           <View style={styles.labelContainer}>
             <Text style={[styles.label, !isPro && styles.lockedLabel]}>Dynamic Alerts</Text>
-            <Text style={styles.subLabel}>Warning for snow, rain, or high winds</Text>
+            <Text style={styles.subLabel}>Warnings for snow, rain, or high winds</Text>
           </View>
           {isPro ? (
             <Switch 
@@ -194,8 +215,8 @@ export default function AlertsScreen() {
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
           {Platform.OS === 'web' 
-            ? "Notifications are simulated on the web. Test on a physical device with Expo Go to see real background alerts."
-            : "Notifications are delivered based on your primary saved location."
+            ? "Notifications are simulated on the web."
+            : `Notifications are delivered at 8:00 AM based on your primary saved location.`
           }
         </Text>
       </View>
